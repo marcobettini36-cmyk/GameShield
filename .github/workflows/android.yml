@@ -3,6 +3,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  workflow_run:
+    workflows: ['Update gambling blacklist']
+    types: [completed]
 permissions:
   contents: read
 concurrency:
@@ -10,12 +13,14 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          ref: ${{ github.event.workflow_run.head_branch || github.ref }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

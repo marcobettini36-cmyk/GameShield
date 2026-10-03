@@ -9,13 +9,13 @@ import java.util.concurrent.*;
 
 /** Authenticated loopback SOCKS5 gateway. Only protected outbound sockets leave the VPN. */
 public final class LocalProxy implements AutoCloseable {
-    private final ProtectedNetwork network;
+    private final ProxyNetwork network;
     private final String username, password;
     private final ServerSocket listener;
     private final ThreadPoolExecutor workers = new ThreadPoolExecutor(0, 128, 30, TimeUnit.SECONDS, new SynchronousQueue<>());
     private final Set<Closeable> live = ConcurrentHashMap.newKeySet();
     private volatile boolean running = true;
-    public LocalProxy(ProtectedNetwork network, String username, String password) throws IOException {
+    public LocalProxy(ProxyNetwork network, String username, String password) throws IOException {
         this.network = network; this.username = username; this.password = password;
         listener = new ServerSocket(0, 64, InetAddress.getByName("127.0.0.1"));
         new Thread(this::accept, "gameshield-socks").start();
@@ -28,7 +28,7 @@ public final class LocalProxy implements AutoCloseable {
         }
     }
     private void submit(Runnable task, Closeable resource) {
-        try { workers.execute(task); } catch (RejectedExecutionException e) { closeResource(resource); }
+        try { workers.execute(task); } catch (RejectedExecutionException e) { closeResource(resource); live.remove(resource); }
     }
     private void handle(Socket client) {
         try (client) {
@@ -46,7 +46,7 @@ public final class LocalProxy implements AutoCloseable {
             int command = in.readUnsignedByte(); if (in.readUnsignedByte() != 0) return;
             Endpoint endpoint = readEndpoint(in); int port = in.readUnsignedShort();
             if (command == 3) { udp(client, in, out); return; }
-            if (command != 1 || network.denied(endpoint.domain, port, false)) { reply(out, 2, 0); return; }
+            if (command != 1 || port == 0 || network.denied(endpoint.domain, port, false)) { reply(out, 2, 0); return; }
             if (port == 53) {
                 reply(out, 0, 0); client.setSoTimeout(60000);
                 while (running) {
@@ -57,8 +57,9 @@ public final class LocalProxy implements AutoCloseable {
             }
             InetAddress address = endpoint.domain == null ? endpoint.ip : network.resolve(endpoint.domain);
             if (address.isLoopbackAddress() || address.isAnyLocalAddress() || address.isMulticastAddress()) { reply(out, 2, 0); return; }
-            try (Socket remote = network.socket(address, port)) {
-                live.add(remote); reply(out, 0, remote.getLocalPort());
+            Socket remote = network.socket(address, port); live.add(remote);
+            try (remote) {
+                reply(out, 0, remote.getLocalPort());
                 // Inspect the first TLS record on HTTPS and HTTP Host on port 80 before forwarding.
                 if (port == 443 || port == 80) {
                     client.setSoTimeout(10000); byte[] first = firstFlight(in, port);
@@ -71,17 +72,20 @@ public final class LocalProxy implements AutoCloseable {
                 try { copy(in, remote.getOutputStream()); remote.shutdownOutput();
                     // Keep remote open until the peer finishes returning data after client half-close.
                     while (!client.isClosed() && running) { try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; } }
-                } finally { live.remove(remote); }
-            }
+                } finally { closeResource(remote); }
+            } finally { live.remove(remote); }
         } catch (IOException ignored) { }
         finally { live.remove(client); }
     }
     private void udp(Socket control, DataInputStream controlIn, DataOutputStream controlOut) throws IOException {
-        try (DatagramSocket relay = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"))) {
+        Set<DatagramSocket> outboundSockets = ConcurrentHashMap.newKeySet();
+        Map<String, DatagramSocket> routes = new HashMap<>();
+        DatagramSocket relay = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"));
+        try (relay) {
             live.add(relay); relay.setSoTimeout(1000); reply(controlOut, 0, relay.getLocalPort()); control.setSoTimeout(0);
             submit(() -> { try { while (controlIn.read() != -1) {} } catch (IOException ignored) {} finally { relay.close(); } }, control);
             InetSocketAddress source = null;
-            while (running && !relay.isClosed()) {
+            while (running && !relay.isClosed() && !control.isClosed()) {
                 try {
                     byte[] buffer = new byte[65507]; DatagramPacket packet = new DatagramPacket(buffer, buffer.length); relay.receive(packet);
                     InetSocketAddress sender = (InetSocketAddress) packet.getSocketAddress();
@@ -90,26 +94,43 @@ public final class LocalProxy implements AutoCloseable {
                     DataInputStream in = new DataInputStream(new ByteArrayInputStream(buffer, 0, packet.getLength()));
                     if (in.readUnsignedShort() != 0 || in.readUnsignedByte() != 0) continue;
                     Endpoint target = readEndpoint(in); int port = in.readUnsignedShort();
+                    if (port == 0) continue;
                     byte[] data = readAll(in, 65507);
                     if (network.denied(target.domain, port, true)) continue;
-                    byte[] result;
-                    if (port == 53) result = network.dns(data);
+                    if (port == 53) sendUdp(relay, source, target, port, network.dns(data));
                     else {
                         InetAddress ip = target.domain == null ? target.ip : network.resolve(target.domain);
                         if (ip.isLoopbackAddress() || ip.isAnyLocalAddress() || ip.isMulticastAddress()) continue;
-                        try (DatagramSocket outbound = network.datagram()) {
-                            live.add(outbound); outbound.connect(ip, port); outbound.send(new DatagramPacket(data, data.length));
-                            DatagramPacket response = new DatagramPacket(new byte[65507], 65507); outbound.receive(response);
-                            result = Arrays.copyOf(response.getData(), response.getLength()); live.remove(outbound);
+                        String key = ip.getHostAddress() + ":" + port;
+                        DatagramSocket outbound = routes.get(key);
+                        if (outbound == null || outbound.isClosed()) {
+                            if (routes.size() >= 8 && outbound == null) continue;
+                            outbound = network.datagram(); outbound.connect(ip, port); outbound.setSoTimeout(1000);
+                            routes.put(key, outbound); outboundSockets.add(outbound); live.add(outbound);
+                            final DatagramSocket connection = outbound; final InetSocketAddress clientAddress = source;
+                            submit(() -> {
+                                try {
+                                    while (running && !relay.isClosed() && !connection.isClosed()) {
+                                        try {
+                                            DatagramPacket response = new DatagramPacket(new byte[65507], 65507); connection.receive(response);
+                                            sendUdp(relay, clientAddress, target, port, Arrays.copyOf(response.getData(), response.getLength()));
+                                        } catch (SocketTimeoutException ignored) { }
+                                    }
+                                } catch (IOException ignored) { }
+                                finally { connection.close(); live.remove(connection); outboundSockets.remove(connection); }
+                            }, connection);
                         }
+                        if (!outbound.isClosed()) outbound.send(new DatagramPacket(data, data.length));
                     }
-                    ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
-                    out.writeShort(0); out.writeByte(0); target.write(out); out.writeShort(port); out.write(result);
-                    byte[] answer = bytes.toByteArray(); if (answer.length <= 65507) relay.send(new DatagramPacket(answer, answer.length, source));
                 } catch (SocketTimeoutException ignored) { } catch (IOException ignored) { }
             }
             live.remove(relay);
-        }
+        } finally { live.remove(relay); for (DatagramSocket socket : outboundSockets) { socket.close(); live.remove(socket); } }
+    }
+    private static void sendUdp(DatagramSocket relay, InetSocketAddress source, Endpoint target, int port, byte[] data) throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(bytes);
+        out.writeShort(0); out.writeByte(0); target.write(out); out.writeShort(port); out.write(data);
+        byte[] answer = bytes.toByteArray(); if (answer.length <= 65507) relay.send(new DatagramPacket(answer, answer.length, source));
     }
     private static byte[] firstFlight(DataInputStream in, int port) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();

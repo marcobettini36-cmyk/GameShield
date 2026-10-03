@@ -19,9 +19,9 @@ ROOT = Path(__file__).resolve().parents[1]
 HAGEZI = "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/gambling-onlydomains.txt"
 ADM_PAGES = {
     "adm-inhibited": "https://www.adm.gov.it/portale/siti-web-inibiti-giochi",
-    "adm-authorized": "https://www.adm.gov.it/portale/monopoli/giochi/gioco_distanza/concessionari",
+    "adm-authorized": "https://www.adm.gov.it/portale/monopoli/giochi/gioco_distanza/gioco_dist_concessionari",
 }
-DOMAIN = re.compile(r"(?<![\w@-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?![\w-])", re.I)
+DOMAIN = re.compile(r"(?<![\w@-])(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})(?![\w-])", re.I)
 
 def fetch(url):
     request = urllib.request.Request(url, headers={"User-Agent": "GameShield-list-builder/0.1", "Accept-Encoding": "identity"})
@@ -63,9 +63,39 @@ def atomic(path, text):
     temporary.write_text(text, encoding="utf-8", newline="\n")
     temporary.replace(path)
 
+def authorized_cells(content):
+    result = set()
+    for cell in re.findall(r'<td\b[^>]*\bheaders=["\']h5["\'][^>]*>(.*?)</td>', content, re.I | re.S):
+        text = html.unescape(re.sub(r"<[^>]+>", " ", cell))
+        for candidate in DOMAIN.findall(text):
+            domain = normalize(candidate.removeprefix("www."))
+            if domain:
+                result.add(domain)
+    return result
+
 def adm_domains(page_url):
     from pypdf import PdfReader
     page = fetch(page_url).decode("utf-8", errors="replace")
+    if "gioco_dist_concessionari" in page_url:
+        resource = re.search(r"var url = '([^']+)'", page)
+        if not resource:
+            raise ValueError("ADM authorized resource link not found")
+        url = html.unescape(resource.group(1))
+        if urllib.parse.urlparse(url).hostname != "www.adm.gov.it":
+            raise ValueError("Unexpected ADM resource host")
+        first = fetch(url).decode("utf-8", errors="replace")
+        result = authorized_cells(first)
+        pages = {int(p) for p in re.findall(r"[?&]pager=(\d+)", html.unescape(first))}
+        if pages and max(pages) > 20:
+            raise ValueError("Too many ADM pages")
+        for number in range(2, max(pages, default=1) + 1):
+            following = authorized_cells(fetch(url + "&pager=" + str(number)).decode("utf-8", errors="replace"))
+            if not following or following <= result:
+                raise ValueError("ADM pagination did not advance")
+            result |= following
+        if len(result) < 20:
+            raise ValueError("ADM authorized list incomplete")
+        return result
     # Select only relevant ADM document links; never crawl arbitrary links.
     links = re.findall(r'href=["\']([^"\']+)["\']', page, re.I)
     selected = []
@@ -74,11 +104,17 @@ def adm_domains(page_url):
         lower = url.lower()
         if urllib.parse.urlparse(url).hostname != "www.adm.gov.it":
             continue
-        if (".pdf" in lower or "/documents/" in lower) and any(term in lower for term in ("inibit", "canali", "concession", "siti")):
+        if (".pdf" in lower or ".txt" in lower or "/documents/" in lower) and any(term in lower for term in ("inibit", "canali", "concession", "siti")):
             selected.append(url)
     result = set()
     for url in list(dict.fromkeys(selected))[:8]:
         content = fetch(url)
+        if ".txt" in url.lower() and not content.lstrip().startswith(b"<"):
+            for domain in DOMAIN.findall(content.decode("utf-8", errors="replace")):
+                domain = normalize(domain.removeprefix("www."))
+                if domain and not domain.endswith("adm.gov.it") and not domain.endswith("aams.gov.it"):
+                    result.add(domain)
+            continue
         if not content.startswith(b"%PDF"):
             continue
         reader = PdfReader(io.BytesIO(content))
@@ -105,6 +141,9 @@ def main():
         community = parse(fetch(HAGEZI).decode("utf-8"))
         if len(community) < 10000:
             raise ValueError("Community list unexpectedly small; keeping existing feed")
+        previous = snapshot_dir / "hagezi.txt"
+        if previous.exists() and len(community) < len(parse(previous.read_text(encoding="utf-8"))) * 0.7:
+            raise ValueError("Community feed shrank by more than 30%; refusing automatic update")
         atomic(snapshot_dir / "hagezi.txt", "\n".join(sorted(community)) + "\n")
         for key, url in ADM_PAGES.items():
             try:

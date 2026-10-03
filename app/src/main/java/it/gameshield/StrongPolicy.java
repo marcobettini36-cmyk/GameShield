@@ -19,6 +19,7 @@ public final class StrongPolicy {
         manager.setAlwaysOnVpnPackage(admin, context.getPackageName(), true);
         manager.setUninstallBlocked(admin, context.getPackageName(), true);
         manager.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_VPN);
+        manager.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_PRIVATE_DNS);
         manager.addUserRestriction(admin, UserManager.DISALLOW_DEBUGGING_FEATURES);
         manager.addUserRestriction(admin, UserManager.DISALLOW_SAFE_BOOT);
         manager.addUserRestriction(admin, UserManager.DISALLOW_FACTORY_RESET);
@@ -33,6 +34,7 @@ public final class StrongPolicy {
         if (!new Guardian(context).authenticate(code)) throw new SecurityException("Codice errato o attesa attiva");
         if (owner()) {
             manager.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_VPN);
+            manager.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_PRIVATE_DNS);
             manager.clearUserRestriction(admin, UserManager.DISALLOW_DEBUGGING_FEATURES);
             manager.clearUserRestriction(admin, UserManager.DISALLOW_SAFE_BOOT);
             manager.clearUserRestriction(admin, UserManager.DISALLOW_FACTORY_RESET);

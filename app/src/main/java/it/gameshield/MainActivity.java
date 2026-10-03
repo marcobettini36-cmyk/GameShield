@@ -29,6 +29,7 @@ public final class MainActivity extends Activity {
         getWindow().setStatusBarColor(Color.rgb(7, 45, 54)); getWindow().setNavigationBarColor(Color.rgb(7, 45, 54));
         ScrollView scroll = new ScrollView(this); scroll.setFillViewport(true);
         LinearLayout root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setPadding(dp(22), dp(28), dp(22), dp(32)); root.setBackgroundColor(Color.rgb(241, 247, 247)); scroll.addView(root); setContentView(scroll);
+        scroll.setOnApplyWindowInsetsListener((v, insets) -> { root.setPadding(dp(22), dp(28) + insets.getSystemWindowInsetTop(), dp(22), dp(32) + insets.getSystemWindowInsetBottom()); return insets; });
         TextView brand = text("GAMESHIELD" + (BuildConfig.STRONG ? "  /  STRONG" : ""), 14, 0xff087f8c); brand.setLetterSpacing(.12f); root.addView(brand);
         root.addView(text("Più spazio alla tua vita.", 30, 0xff072d36));
         root.addView(text("Un filtro locale per ridurre l’accesso al gioco d’azzardo online.", 16, 0xff47636b));

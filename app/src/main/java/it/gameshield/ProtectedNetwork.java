@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import javax.net.ssl.*;
 
 /** Every outbound socket is protected BEFORE connect to prevent VPN recursion. */
-public final class ProtectedNetwork {
+public final class ProtectedNetwork implements ProxyNetwork {
     private final VpnService vpn;
     private final RuleStore store;
     public final AtomicLong blocked = new AtomicLong();

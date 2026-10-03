@@ -33,9 +33,13 @@ android {
         strong { dimension 'protection'; minSdk 30; applicationIdSuffix '.strong'; buildConfigField 'boolean', 'STRONG', 'true'; resValue 'string', 'app_name', 'GameShield Strong' }
     }
     buildFeatures { buildConfig true }
+    if (project.hasProperty('debugKeystorePath')) {
+        signingConfigs.debug.storeFile = rootProject.file(project.property('debugKeystorePath'))
+    }
     externalNativeBuild { ndkBuild { path file('../native/Android.mk') } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { release { minifyEnabled false } }
     lint { abortOnError true }
+    testOptions { unitTests.all { systemProperty 'gameshield.assets', file('src/main/assets').absolutePath } }
 }
 dependencies { testImplementation 'junit:junit:4.13.2' }

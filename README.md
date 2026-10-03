@@ -8,6 +8,7 @@ App Android per ridurre l'accesso al gioco d'azzardo online, con due APK: **Norm
 - DNS locale: domini e sottodomini bloccati con NXDOMAIN, verifica CNAME/DNAME, DNS UDP e TCP. Resolver per richieste consentite: Cloudflare e Quad9.
 - Filtro aggiuntivo HTTP Host e TLS SNI su porte 80/443; blocco DoT/DoQ (853), QUIC (UDP 443) e alcuni endpoint DoH noti. HTTPS non viene decifrato.
 - Blacklist GPLv3 HaGeZi Gambling, domini italiani curati e importazione dei PDF ADM quando disponibili. Snapshot inclusa nell'APK; aggiornamenti HTTPS ogni 12 ore mentre la VPN è attiva; sostituzione atomica e mantenimento dell'ultima lista valida in caso di errore.
+- Acquisizione della directory paginata ADM dei siti autorizzati e dell'elenco TXT/PDF dei siti inibiti; snapshot e stato di ogni fonte nei metadati.
 - Aggiunta locale di domini/mirror e verifica della lista. Nessuna eccezione che permetta al normale utente di rimuovere blocchi Strong.
 - Notifica persistente, ripresa dopo riavvio, statistiche aggregate per sessione, collegamento all'autoesclusione ADM.
 - Strong: anti-disinstallazione Device Owner, always-on/lockdown, restrizioni debug/modifica VPN/safe boot/ripristino dalle impostazioni/nuovi utenti; codice custode PBKDF2-HMAC-SHA256 (210000 iterazioni, sale casuale), confronto costante, attese crescenti dopo errori e rilascio offline.
@@ -35,7 +36,7 @@ python scripts/update_lists.py
 
 `feeds/metadata.json` riporta conteggio, hash e avvisi su fonti non disponibili. ADM può rifiutare lo scraping o cambiare struttura: l'ultimo snapshot viene conservato; non si dichiara un aggiornamento ADM riuscito quando non lo è. La lista curata include operatori italiani e internazionali senza classificare il loro status di licenza. HaGeZi copre ulteriori domini e mirror, ma **non esiste una garanzia di copertura di tutti i domini nuovi**.
 
-Il workflow giornaliero genera una PR di aggiornamento lista. L'amministratore deve consentire a GitHub Actions di creare PR nelle impostazioni Actions del repository e approvarle/mergerle dopo la revisione: il merge pubblica il feed usato dall'app e avvia nuove build. Si possono aggiornare manualmente `feeds/curated.txt` e `feeds/bypass.txt` e rigenerare con `--offline`.
+Il workflow giornaliero pubblica gli snapshot validati sul branch principale e avvia nuove build tramite `workflow_run`. Una riduzione superiore al 30% della fonte comunitaria interrompe l'aggiornamento; i guasti ADM conservano lo snapshot precedente e sono registrati nei metadati. Le protezioni del branch devono consentire il commit dell'automazione; in caso contrario il job fallisce senza perdere la lista pubblicata. Si possono aggiornare manualmente `feeds/curated.txt` e `feeds/bypass.txt` e rigenerare con `--offline`.
 
 ## Provisioning Strong (custode)
 

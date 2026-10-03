@@ -18,9 +18,10 @@ public final class ShieldVpnService extends VpnService {
     private ProtectedNetwork network;
     private ScheduledExecutorService worker;
     private volatile boolean active;
+    private final Object lifecycle = new Object();
     public static volatile boolean running;
     @Override public void onCreate() {
-        super.onCreate(); worker = Executors.newSingleThreadScheduledExecutor();
+        super.onCreate(); worker = Executors.newScheduledThreadPool(2);
         getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("vpn", "Protezione GameShield", NotificationManager.IMPORTANCE_LOW));
     }
     private void foreground(String text) {
@@ -41,6 +42,8 @@ public final class ShieldVpnService extends VpnService {
         worker.execute(() -> {
             try {
                 store = new RuleStore(this); network = new ProtectedNetwork(this, store);
+                synchronized (lifecycle) {
+                if (!active) return;
                 byte[] random = new byte[24]; new SecureRandom().nextBytes(random);
                 String password = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
                 proxy = new LocalProxy(network, "gameshield", password);
@@ -53,6 +56,7 @@ public final class ShieldVpnService extends VpnService {
                 try (FileOutputStream out = new FileOutputStream(file)) { out.write(config.getBytes(StandardCharsets.UTF_8)); }
                 if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
                 running = true;
+                }
                 getSharedPreferences("shield", 0).edit().putBoolean("wanted", true).remove("error").putInt("rules", store.rules().size()).apply();
                 foreground("Filtro VPN attivo");
                 worker.scheduleWithFixedDelay(this::health, 2, 2, TimeUnit.SECONDS);
@@ -79,9 +83,11 @@ public final class ShieldVpnService extends VpnService {
     @Override public void onDestroy() {
         active = false; running = false;
         if (worker != null) worker.shutdownNow();
-        try { TProxyService.TProxyStopService(); } catch (LinkageError ignored) { }
-        if (proxy != null) proxy.close();
-        if (tunnel != null) try { tunnel.close(); } catch (IOException ignored) { }
+        synchronized (lifecycle) {
+            try { TProxyService.TProxyStopService(); } catch (LinkageError ignored) { }
+            if (proxy != null) proxy.close();
+            if (tunnel != null) try { tunnel.close(); } catch (IOException ignored) { }
+        }
         super.onDestroy();
     }
 }

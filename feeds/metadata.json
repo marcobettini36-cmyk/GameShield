@@ -1,7 +1,20 @@
 {
-  "generated_at": "2026-10-03T22:09:55.214419+00:00",
-  "count": 85,
-  "sha256": "098c545abfce9164f1441b3810527ca5baaf444bf09d51317416bde340c17661",
-  "sources": {},
+  "generated_at": "2026-10-03T22:29:44.969608+00:00",
+  "count": 586662,
+  "sha256": "508242db9d58cc9dfce1b51c85f7a32b4887ba0aaa72d8edc0f0441207aec963",
+  "sources": {
+    "adm-authorized": {
+      "count": 52,
+      "sha256": "7f6289f3e3205748776282ee1ffcd95ffa9f85f91e648f88df11c46072f010e7"
+    },
+    "adm-inhibited": {
+      "count": 12072,
+      "sha256": "c2d12bab8f247fcc7ba497be68e045405723f0100115b77700a4f0c840e23fbf"
+    },
+    "hagezi": {
+      "count": 578451,
+      "sha256": "5cd91dffb392d3b3fc10972dd279303d39c95725f2053022f71d85c430c250e2"
+    }
+  },
   "warnings": []
 }
