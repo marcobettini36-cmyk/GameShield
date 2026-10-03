@@ -18,6 +18,8 @@ public class DomainRulesTest {
         try (Reader reader = new InputStreamReader(new FileInputStream(new File(System.getProperty("gameshield.assets"), "gambling.txt")), StandardCharsets.UTF_8)) { DomainRules.readInto(reader, domains); }
         assertTrue(domains.size() > 10000); DomainRules rules = new DomainRules(domains);
         assertTrue(rules.blocks("bet365.it")); assertTrue(rules.blocks("new.mirror.stake.com")); assertTrue(rules.blocks("sunbet.it")); assertFalse(rules.blocks("example.org"));
+        for (String host : Arrays.asList("google.com", "wikipedia.org", "github.com", "dns.google", "cloudflare-dns.com", "dns.quad9.net")) assertFalse(host, rules.blocks(host));
+        for (String host : Arrays.asList("playzilla.com", "excitewin.com", "new.playzilla.com")) assertTrue(host, rules.blocks(host));
     }
     @Test(expected = IOException.class) public void streamingParserRejectsCorruptFeed() throws Exception { DomainRules.readInto(new StringReader("casino.com\n<html>error</html>"), new HashSet<>()); }
 }

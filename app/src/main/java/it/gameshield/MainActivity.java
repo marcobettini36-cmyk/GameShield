@@ -77,14 +77,14 @@ public final class MainActivity extends Activity {
         })));
         button(tools, "Impostazioni VPN Android", () -> startActivity(new Intent(Settings.ACTION_VPN_SETTINGS)));
         LinearLayout help = card(root); help.addView(text("Un aiuto in più", 21, 0xff072d36));
-        help.addView(text("GameShield blocca domini conosciuti e sottodomini. Nuovi mirror, IP diretti, DNS cifrato personalizzato ed ECH possono superare il filtro. Una sola VPN può essere attiva. DNS verso Cloudflare/Quad9; nessuna intercettazione HTTPS e nessuna cronologia di navigazione salvata.", 14, 0xff47636b));
+        help.addView(text("GameShield blocca domini conosciuti e sottodomini. Nuovi mirror, IP diretti, DNS cifrato personalizzato ed ECH possono superare il filtro. Una sola VPN può essere attiva. DNS della rete, con fallback Cloudflare/Quad9; nessuna intercettazione HTTPS e nessuna cronologia di navigazione salvata.", 14, 0xff47636b));
         button(help, "Autoesclusione ADM", () -> startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://arserviziam.adm.gov.it/static/pudm_rua/index.html"))));
         help.addView(text("Se il gioco ti mette in difficoltà, rivolgiti al SerD della tua zona o a una persona di fiducia.", 14, 0xff47636b));
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2);
     }
     private void startProtection() {
         new AlertDialog.Builder(this).setTitle("Consenso alla VPN locale")
-            .setMessage("GameShield instrada il traffico nel dispositivo per filtrare i domini. Non invia il traffico a un server VPN. Le richieste DNS consentite vengono inviate a Cloudflare o Quad9. Questo sostituisce eventuali altre VPN attive.")
+            .setMessage("GameShield instrada il traffico nel dispositivo per filtrare i domini. Non invia il traffico a un server VPN. Le richieste DNS consentite usano i resolver della rete, con fallback Cloudflare o Quad9. La Normal disattiva il filtro se il tunnel impedisce la connettività. Questo sostituisce eventuali altre VPN attive.")
             .setNegativeButton("Annulla", null).setPositiveButton("Continua", (d, w) -> {
                 Intent consent = android.net.VpnService.prepare(this);
                 if (consent == null) launch(); else { consentPending = true; startActivityForResult(consent, 1); }
@@ -111,15 +111,17 @@ public final class MainActivity extends Activity {
     private void renderStatus() {
         if (status == null) return;
         boolean running = ShieldVpnService.running, locked = new StrongPolicy(this).locked();
-        status.setText(running ? "Protezione attiva" : "Protezione disattivata");
+        boolean connected = prefs.getBoolean("connectivityOk", false);
+        status.setText(running ? (connected ? "Protezione attiva" : "Verifica connettività VPN") : "Protezione disattivata");
         String message = locked ? "Strong: disinstallazione bloccata e VPN vincolata" : "VPN locale • filtro DNS, HTTP Host e TLS SNI";
         if (prefs.contains("error")) message += "\n" + prefs.getString("error", "");
         if (prefs.contains("updateError")) message += "\n" + prefs.getString("updateError", "");
+        if (prefs.contains("connectivity")) message += "\n" + prefs.getString("connectivity", "");
         detail.setText(message);
         long updated = prefs.getLong("updated", 0);
         counters.setText(prefs.getInt("rules", 0) + " domini • " + prefs.getLong("blocked", 0) + " blocchi in questa sessione\n" + (updated == 0 ? "Lista inclusa nell’app" : "Aggiornata: " + DateFormat.getDateTimeInstance().format(new Date(updated))));
         start.setEnabled(!running); stop.setEnabled(running && !locked);
-        if (strong != null) strong.setEnabled(running && new StrongPolicy(this).owner() && new Guardian(this).configured() && !locked);
+        if (strong != null) strong.setEnabled(running && connected && new StrongPolicy(this).owner() && new Guardian(this).configured() && !locked);
     }
     @Override protected void onResume() { super.onResume(); handler.post(refresh); }
     @Override protected void onPause() { handler.removeCallbacks(refresh); super.onPause(); }

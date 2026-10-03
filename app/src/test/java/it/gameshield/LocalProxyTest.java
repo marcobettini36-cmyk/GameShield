@@ -16,7 +16,7 @@ public class LocalProxyTest {
         public DatagramSocket datagram() throws IOException { return new DatagramSocket() { @Override public void connect(InetAddress ip, int port) { super.connect(InetAddress.getLoopbackAddress(), echoPort); } }; }
         public byte[] dns(byte[] q) throws IOException { return Dns.refused(q, rules.blocks(Dns.question(q)) ? 3 : 2); }
         public InetAddress resolve(String d) throws IOException { return InetAddress.getByAddress(new byte[]{(byte) 203, 0, 113, 10}); }
-        public boolean denied(String d, int port, boolean udp) { return rules.blocks(d) || port == 853 || (udp && port == 443); }
+        public boolean denied(String d, int port, boolean udp) { return rules.blocks(d); }
     }
     private static Socket client(LocalProxy proxy) throws IOException { Socket c = new Socket("127.0.0.1", proxy.port()); c.setSoTimeout(5000); return c; }
     private static boolean auth(Socket c, String password) throws IOException {
@@ -41,11 +41,16 @@ public class LocalProxyTest {
         Network n = new Network(); try (LocalProxy p = new LocalProxy(n, "user", "secret"); Socket c = client(p)) { assertTrue(auth(c, "secret")); assertEquals(-2, request(c, 1, "new.casino.com", 443)); assertEquals(0, n.connects.get()); }
     }
     @Test public void forwardsAllowedTcpBothDirections() throws Exception {
+        tcpEcho(12345);
+    }
+    @Test public void normalTcp443IsNotAssumedToBeTls() throws Exception { tcpEcho(443); }
+    @Test public void port853IsNotBlanketBlocked() throws Exception { tcpEcho(853); }
+    private void tcpEcho(int port) throws Exception {
         Network n = new Network();
         try (ServerSocket echo = new ServerSocket(0); LocalProxy p = new LocalProxy(n, "user", "secret"); Socket c = client(p)) {
             n.echoPort = echo.getLocalPort();
             Thread peer = new Thread(() -> { try (Socket s = echo.accept()) { byte[] b = new byte[5]; new DataInputStream(s.getInputStream()).readFully(b); s.getOutputStream().write(b); s.getOutputStream().flush(); } catch (IOException ignored) {} }); peer.start();
-            assertTrue(auth(c, "secret")); assertTrue(request(c, 1, null, 12345) > 0);
+            assertTrue(auth(c, "secret")); assertTrue(request(c, 1, null, port) > 0);
             byte[] sent = {1, 2, 3, 4, 5}; c.getOutputStream().write(sent); c.getOutputStream().flush(); byte[] got = new byte[5]; new DataInputStream(c.getInputStream()).readFully(got); assertArrayEquals(sent, got);
             peer.join(3000); assertFalse(peer.isAlive()); assertEquals(1, n.connects.get());
         }
@@ -66,6 +71,10 @@ public class LocalProxyTest {
         }
     }
     @Test public void forwardsMultipleUdpRepliesUsingStableSocket() throws Exception {
+        udpEcho(12345);
+    }
+    @Test public void quicPort443IsForwardedInsteadOfDropped() throws Exception { udpEcho(443); }
+    private void udpEcho(int targetPort) throws Exception {
         Network n = new Network();
         try (DatagramSocket echo = new DatagramSocket(); LocalProxy p = new LocalProxy(n, "user", "secret"); Socket c = client(p); DatagramSocket udp = new DatagramSocket()) {
             n.echoPort = echo.getLocalPort(); echo.setSoTimeout(5000); udp.setSoTimeout(5000);
@@ -76,7 +85,7 @@ public class LocalProxyTest {
                 } catch (IOException ignored) { }
             }); peer.start();
             assertTrue(auth(c, "secret")); int port = request(c, 3, null, 0);
-            ByteArrayOutputStream b = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(b); out.write(new byte[]{0, 0, 0, 1, (byte) 203, 0, 113, 10}); out.writeShort(12345); out.writeByte(9);
+            ByteArrayOutputStream b = new ByteArrayOutputStream(); DataOutputStream out = new DataOutputStream(b); out.write(new byte[]{0, 0, 0, 1, (byte) 203, 0, 113, 10}); out.writeShort(targetPort); out.writeByte(9);
             byte[] sent = b.toByteArray(); udp.send(new DatagramPacket(sent, sent.length, InetAddress.getLoopbackAddress(), port));
             for (int expected : new int[]{42, 43}) { DatagramPacket reply = new DatagramPacket(new byte[100], 100); udp.receive(reply); assertEquals(11, reply.getLength()); assertEquals(expected, reply.getData()[10]); }
             peer.join(3000); assertFalse(peer.isAlive());

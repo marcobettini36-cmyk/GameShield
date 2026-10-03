@@ -5,8 +5,9 @@ App Android per ridurre l'accesso al gioco d'azzardo online, con due APK: **Norm
 ## Funzioni
 
 - VPN locale completa IPv4/IPv6 con motore tun2socks HEV, TCP e UDP; nessun server VPN remoto.
-- DNS locale: domini e sottodomini bloccati con NXDOMAIN, verifica CNAME/DNAME, DNS UDP e TCP. Resolver per richieste consentite: Cloudflare e Quad9.
-- Filtro aggiuntivo HTTP Host e TLS SNI su porte 80/443; blocco DoT/DoQ (853), QUIC (UDP 443) e alcuni endpoint DoH noti. HTTPS non viene decifrato.
+- DNS locale: domini e sottodomini bloccati con NXDOMAIN, verifica CNAME/DNAME, DNS UDP e TCP. Prima usa i DNS della rete fisica, poi Cloudflare/Quad9; fallback TCP anche su timeout UDP. I socket sono protetti e vincolati alla rete fisica prima della connessione.
+- Filtro HTTP Host, TLS SNI su 443/853 e SNI del ClientHello QUIC Initial v1/v2 quando completo. QUIC, DoT/DoQ e provider DoH consentiti: nessun blocco globale per porta. Non vengono decifrati i contenuti HTTPS.
+- Self-test con socket esplicitamente vincolati alla rete VPN: DNS Android, TCP 443 e HTTPS con certificato verificato per google.com, wikipedia.org e github.com, dopo avvio e ogni minuto. Esito visibile nella dashboard. Normal chiude il TUN e disattiva il filtro entro 30 secondi dal fallimento del controllo; Strong conserva il TUN e segnala l’errore. Normal non supporta always-on/lockdown e non riparte dopo un errore di inoltro.
 - Blacklist GPLv3 HaGeZi Gambling, domini italiani curati e importazione dei PDF ADM quando disponibili. Snapshot inclusa nell'APK; aggiornamenti HTTPS ogni 12 ore mentre la VPN è attiva; sostituzione atomica e mantenimento dell'ultima lista valida in caso di errore.
 - Acquisizione della directory paginata ADM dei siti autorizzati e dell'elenco TXT/PDF dei siti inibiti; snapshot e stato di ogni fonte nei metadati.
 - Aggiunta locale di domini/mirror e verifica della lista. Nessuna eccezione che permetta al normale utente di rimuovere blocchi Strong.
@@ -24,7 +25,7 @@ cd GameShield
 
 Su Windows usare `gradlew.bat`. Gradle materializza gli header linkati del submodule su Windows. Il wrapper è Gradle 8.11.1, AGP 8.10.1; il motore è fissato al commit `2cdc169a248ced7097a7931aea5bf81540dc7759` e le sue dipendenze ai gitlink di quel commit. ABI arm64-v8a, armeabi-v7a e x86_64; allineamento nativo a 16 KB.
 
-Gli APK debug sono in `app/build/outputs/apk/{normal,strong}/debug/`. GitHub Actions esegue test, lint e build di entrambe le varianti su ogni push/PR e offre APK come artifact. Gli APK release sono **non firmati**: prima della distribuzione firmarli con una chiave stabile custodita dal proprietario. Le chiavi debug servono ai test e possono cambiare tra runner CI: non usarle per una flotta Strong.
+Gli APK debug sono in `app/build/outputs/apk/{normal,strong}/debug/`. GitHub Actions esegue test, lint e build di entrambe le varianti su ogni push/PR e offre APK come artifact. Un secondo job avvia Android 11 API 30 e verifica il TUN nativo, navigazione consentita, domini bloccati, Private DNS Off/Automatico e guasti del relay per entrambe le edizioni; i log sono nell’artifact native-tunnel-device-reports. Gli APK release sono **non firmati**: prima della distribuzione firmarli con una chiave stabile custodita dal proprietario. Le chiavi debug servono ai test e possono cambiare tra runner CI: non usarle per una flotta Strong.
 
 ## Blacklist e nuovi mirror
 
@@ -36,7 +37,7 @@ python scripts/update_lists.py
 
 `feeds/metadata.json` riporta conteggio, hash e avvisi su fonti non disponibili. ADM può rifiutare lo scraping o cambiare struttura: l'ultimo snapshot viene conservato; non si dichiara un aggiornamento ADM riuscito quando non lo è. La lista curata include operatori italiani e internazionali senza classificare il loro status di licenza. HaGeZi copre ulteriori domini e mirror, ma **non esiste una garanzia di copertura di tutti i domini nuovi**.
 
-Il workflow giornaliero pubblica gli snapshot validati sul branch principale e avvia nuove build tramite `workflow_run`. Una riduzione superiore al 30% della fonte comunitaria interrompe l'aggiornamento; i guasti ADM conservano lo snapshot precedente e sono registrati nei metadati. Le protezioni del branch devono consentire il commit dell'automazione; in caso contrario il job fallisce senza perdere la lista pubblicata. Si possono aggiornare manualmente `feeds/curated.txt` e `feeds/bypass.txt` e rigenerare con `--offline`.
+Il workflow giornaliero pubblica gli snapshot validati sul branch principale e avvia nuove build tramite `workflow_run`. Una riduzione superiore al 30% della fonte comunitaria interrompe l'aggiornamento; i guasti ADM conservano lo snapshot precedente e sono registrati nei metadati. Le protezioni del branch devono consentire il commit dell'automazione; in caso contrario il job fallisce senza perdere la lista pubblicata. Si può aggiornare manualmente `feeds/curated.txt` e rigenerare con `--offline`. `feeds/bypass.txt` contiene esclusioni di migrazione: i provider DNS vengono rimossi dalla lista gambling e dalle vecchie cache, non bloccati.
 
 ## Provisioning Strong (custode)
 
@@ -53,9 +54,9 @@ Il **Rilascio del custode** con codice corretto elimina restrizioni, always-on, 
 
 ## Limiti e verifiche su dispositivo
 
-DNS cifrato personalizzato, ECH, SNI diviso tra record TLS, tunnel applicativi, IP diretti e nuovi domini non censiti possono aggirare il filtro. Il blocco UDP 443 forza il fallback a HTTPS TCP nelle applicazioni compatibili; applicazioni solo QUIC possono non funzionare. Non è implementata ispezione contenuti HTTPS, classificazione AI o scoperta attiva di domini. VPN concorrenti non sono supportate. Non promette anti-disinstallazione assoluta contro root, bootloader sbloccato, recovery o reflash; restrizioni OEM vanno provate.
+DNS cifrato combinato con ECH/SNI non disponibile, ClientHello QUIC frammentati tra datagrammi, SNI diviso tra record TLS, tunnel applicativi, IP diretti e nuovi domini non censiti possono aggirare il filtro. QUIC consentito non richiede fallback TCP. Private DNS Automatico può ripiegare sul DNS locale; la modalità stretta e Secure DNS dei browser non sono interrotti deliberatamente, ma possono ridurre la visibilità del filtro DNS. Non è implementata ispezione contenuti HTTPS, classificazione AI o scoperta attiva di domini. VPN concorrenti non sono supportate. Non promette anti-disinstallazione assoluta contro root, bootloader sbloccato, recovery o reflash; restrizioni OEM vanno provate.
 
-La compilazione e i test JVM non certificano il comportamento sul dispositivo. Prima dell'uso reale seguire `docs/DEVICE_TESTS.md`, inclusi cambio rete, riavvio, DNS cifrato, lockdown, codice errato e rilascio. Il proxy ha limiti di concorrenza (64 sessioni native, massimo 128 worker); non è un gateway general purpose ad alte prestazioni.
+La compilazione e i test JVM non certificano il comportamento sul dispositivo. Prima dell'uso reale seguire `docs/DEVICE_TESTS.md`, inclusi cambio rete, riavvio, DNS cifrato, lockdown, codice errato e rilascio. Il proxy ha limiti di concorrenza (64 sessioni native, massimo 192 worker e 4 worker DNS con coda limitata); non è un gateway general purpose ad alte prestazioni.
 
 ## Privacy e licenze
 

@@ -37,7 +37,14 @@ jobs:
       - name: Build and verify both editions
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon testNormalDebugUnitTest testStrongDebugUnitTest lintNormalDebug lintStrongDebug assembleNormalDebug assembleStrongDebug assembleNormalRelease assembleStrongRelease
+          ./gradlew --no-daemon testNormalDebugUnitTest testStrongDebugUnitTest lintNormalDebug lintStrongDebug assembleNormalDebug assembleStrongDebug assembleNormalRelease assembleStrongRelease assembleNormalDebugAndroidTest assembleStrongDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: device-test-apks
+          path: |
+            app/build/outputs/apk/*/debug/*.apk
+            app/build/outputs/apk/androidTest/*/debug/*.apk
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         with:
           name: GameShield-Normal-debug
@@ -60,3 +67,32 @@ jobs:
           path: |
             app/build/reports/
             feeds/metadata.json
+  device:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: device-test-apks
+          path: device-apks
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise actual VPN data path and failure policies
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: default
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: python3 scripts/device_tests.py device-apks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-tunnel-device-reports
+          path: device-reports/

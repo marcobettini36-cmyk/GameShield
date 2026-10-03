@@ -29,6 +29,10 @@ public final class RuleStore {
         applyCustom(merged);
     }
     private void applyCustom(Set<String> merged) {
+        // Migrate caches from 0.1.0, which incorrectly included encrypted DNS providers.
+        merged.removeAll(Arrays.asList("dns.google", "cloudflare-dns.com", "mozilla.cloudflare-dns.com",
+            "dns.quad9.net", "doh.opendns.com", "dns.nextdns.io", "dns.adguard-dns.com",
+            "doh.cleanbrowsing.org", "dns.controld.com"));
         String custom = context.getSharedPreferences("shield", 0).getString("custom", "");
         if (!custom.trim().isEmpty()) merged.addAll(DomainRules.parse(custom));
         rules = new DomainRules(merged);

@@ -1,6 +1,10 @@
 package it.gameshield;
 
 import android.net.VpnService;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.LinkProperties;
 import java.io.*;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
@@ -13,42 +17,70 @@ import javax.net.ssl.*;
 public final class ProtectedNetwork implements ProxyNetwork {
     private final VpnService vpn;
     private final RuleStore store;
+    private final ConnectivityManager connectivity;
     public final AtomicLong blocked = new AtomicLong();
-    public ProtectedNetwork(VpnService vpn, RuleStore store) { this.vpn = vpn; this.store = store; }
+    public ProtectedNetwork(VpnService vpn, RuleStore store) {
+        this.vpn = vpn; this.store = store; connectivity = vpn.getSystemService(ConnectivityManager.class);
+    }
+    public Network underlying() {
+        Network selected = null;
+        for (Network candidate : connectivity.getAllNetworks()) {
+            NetworkCapabilities caps = connectivity.getNetworkCapabilities(candidate);
+            if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                    || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
+            if (candidate.equals(connectivity.getActiveNetwork())) return candidate;
+            if (selected == null || caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) selected = candidate;
+        }
+        return selected;
+    }
     public Socket socket(InetAddress ip, int port) throws IOException {
         Socket socket = new Socket();
         try {
             if (!vpn.protect(socket)) throw new IOException("Impossibile proteggere socket");
+            Network physical = underlying(); if (physical != null) physical.bindSocket(socket);
             socket.connect(new InetSocketAddress(ip, port), 10000); socket.setSoTimeout(60000); return socket;
         } catch (IOException e) { socket.close(); throw e; }
     }
     public DatagramSocket datagram() throws IOException {
         DatagramSocket socket = new DatagramSocket();
         if (!vpn.protect(socket)) { socket.close(); throw new IOException("Impossibile proteggere UDP"); }
-        socket.setSoTimeout(8000); return socket;
+        try {
+            Network physical = underlying(); if (physical != null) physical.bindSocket(socket);
+            socket.setSoTimeout(2500); return socket;
+        } catch (IOException e) { socket.close(); throw e; }
     }
     public byte[] dns(byte[] query) throws IOException {
         String domain = Dns.question(query);
         if (store.rules().blocks(domain)) { blocked.incrementAndGet(); return Dns.refused(query, 3); }
-        IOException failure = null;
-        for (String resolver : new String[]{"1.1.1.1", "9.9.9.9"}) {
+        LinkedHashSet<InetAddress> resolvers = new LinkedHashSet<>();
+        Network physical = underlying();
+        LinkProperties properties = physical == null ? null : connectivity.getLinkProperties(physical);
+        if (properties != null) resolvers.addAll(properties.getDnsServers());
+        resolvers.removeIf(ip -> ip.isLoopbackAddress() || ip.getHostAddress().equals("198.18.0.2"));
+        resolvers.add(InetAddress.getByName("1.1.1.1")); resolvers.add(InetAddress.getByName("9.9.9.9"));
+        for (InetAddress resolver : resolvers) {
+            byte[] answer;
             try (DatagramSocket socket = datagram()) {
-                socket.connect(InetAddress.getByName(resolver), 53);
+                socket.connect(resolver, 53);
                 socket.send(new DatagramPacket(query, query.length));
                 byte[] buffer = new byte[65507]; DatagramPacket packet = new DatagramPacket(buffer, buffer.length); socket.receive(packet);
-                byte[] answer = Arrays.copyOf(buffer, packet.getLength());
+                answer = Arrays.copyOf(buffer, packet.getLength());
                 if (answer.length < 12 || Dns.u16(answer, 0) != Dns.u16(query, 0) || (answer[2] & 0x80) == 0) throw new IOException("Invalid DNS reply");
                 // Truncated responses are retried over protected TCP.
-                if ((answer[2] & 2) != 0) answer = tcpDns(query, InetAddress.getByName(resolver));
-                if (Dns.containsBlockedAlias(answer, store.rules())) { blocked.incrementAndGet(); return Dns.refused(query, 3); }
-                return answer;
-            } catch (IOException e) { failure = e; }
+                if ((answer[2] & 2) != 0) answer = tcpDns(query, resolver);
+            } catch (IOException e) {
+                // UDP/53 is restricted on some networks. Retry TCP even on timeout, not only TC=1.
+                try { answer = tcpDns(query, resolver); } catch (IOException ignored) { continue; }
+            }
+            if (Dns.containsBlockedAlias(answer, store.rules())) { blocked.incrementAndGet(); return Dns.refused(query, 3); }
+            if ((answer[3] & 15) == 2 || (answer[3] & 15) == 5) continue;
+            return answer;
         }
-        if (failure != null) return Dns.refused(query, 2);
-        throw new IOException("DNS unavailable");
+        return Dns.refused(query, 2);
     }
     private byte[] tcpDns(byte[] q, InetAddress resolver) throws IOException {
         try (Socket socket = socket(resolver, 53)) {
+            socket.setSoTimeout(2500);
             DataOutputStream out = new DataOutputStream(socket.getOutputStream()); out.writeShort(q.length); out.write(q); out.flush();
             DataInputStream in = new DataInputStream(socket.getInputStream()); byte[] answer = new byte[in.readUnsignedShort()]; in.readFully(answer);
             if (answer.length < 12 || Dns.u16(answer, 0) != Dns.u16(q, 0) || (answer[2] & 0x80) == 0) throw new IOException("Invalid DNS TCP reply");
@@ -59,7 +91,8 @@ public final class ProtectedNetwork implements ProxyNetwork {
         return InetAddress.getByAddress(Dns.firstIpv4(dns(Dns.query(domain, new SecureRandom().nextInt(65536)))));
     }
     public boolean denied(String domain, int port, boolean udp) {
-        boolean deny = port == 853 || (udp && port == 443) || (domain != null && store.rules().blocks(domain));
+        // Ports and DNS transports are not gambling. Dropping QUIC/DoT globally breaks legitimate apps.
+        boolean deny = domain != null && store.rules().blocks(domain);
         if (deny) blocked.incrementAndGet(); return deny;
     }
     public byte[] downloadFeed() throws IOException {

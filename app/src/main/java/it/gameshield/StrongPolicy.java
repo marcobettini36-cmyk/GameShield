@@ -16,6 +16,8 @@ public final class StrongPolicy {
     public boolean locked() { return owner() && manager.isUninstallBlocked(admin, context.getPackageName()); }
     public void enable() throws android.content.pm.PackageManager.NameNotFoundException {
         if (!owner() || !new Guardian(context).configured()) throw new SecurityException("Device Owner e codice custode richiesti");
+        if (!ShieldVpnService.running || !context.getSharedPreferences("shield", 0).getBoolean("connectivityOk", false))
+            throw new SecurityException("Prima verifica DNS e HTTPS nel tunnel");
         manager.setAlwaysOnVpnPackage(admin, context.getPackageName(), true);
         manager.setUninstallBlocked(admin, context.getPackageName(), true);
         manager.addUserRestriction(admin, UserManager.DISALLOW_CONFIG_VPN);

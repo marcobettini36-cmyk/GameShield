@@ -1,4 +1,4 @@
-# GameShield: gambling domains and common DNS bypass endpoints
+# GameShield: gambling domains (DNS providers are not gambling)
 0-10-7.casino
 0-2-0-7.casino
 0-30-7.casino
@@ -240931,7 +240931,6 @@ cloudbetwixt.xyz
 cloudcasino.com
 cloudcs.info
 clouddiabetes.xyz
-cloudflare-dns.com
 cloudflare.bet
 cloudgaming002.com
 cloudhousevapor.com
@@ -257482,11 +257481,6 @@ dnkbets.com
 dnl.casino
 dnp.casino
 dnq.casino
-dns.adguard-dns.com
-dns.controld.com
-dns.google
-dns.nextdns.io
-dns.quad9.net
 dns66.casino
 dnshao123.com
 dnv.casino
@@ -257650,8 +257644,6 @@ dogsfortune.com
 dogslots.net
 dogsplayingpoker.app
 doh.casino
-doh.cleanbrowsing.org
-doh.opendns.com
 dohmen-pfaller-personalgewinnung.com
 doicasino.com
 doicasinoapp.com
@@ -405758,7 +405750,6 @@ moxtbet-j5q.top
 moxtbet-j6q.top
 moyoslots.store
 mozart-casino.com
-mozilla.cloudflare-dns.com
 mozzart-bet.casino
 mozzart-casino-de.org
 mozzart-casino.click

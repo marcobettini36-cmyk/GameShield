@@ -3,6 +3,7 @@ package it.gameshield;
 import android.app.*;
 import android.content.*;
 import android.net.VpnService;
+import android.net.*;
 import android.os.*;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -17,11 +18,13 @@ public final class ShieldVpnService extends VpnService {
     private RuleStore store;
     private ProtectedNetwork network;
     private ScheduledExecutorService worker;
+    private final ExecutorService probes = Executors.newSingleThreadExecutor();
     private volatile boolean active;
+    private Network lastUnderlying;
     private final Object lifecycle = new Object();
     public static volatile boolean running;
     @Override public void onCreate() {
-        super.onCreate(); worker = Executors.newScheduledThreadPool(2);
+        super.onCreate(); worker = Executors.newScheduledThreadPool(3);
         getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("vpn", "Protezione GameShield", NotificationManager.IMPORTANCE_LOW));
     }
     private void foreground(String text) {
@@ -33,10 +36,14 @@ public final class ShieldVpnService extends VpnService {
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         foreground("Avvio della protezione…");
         if (active) {
+            if (BuildConfig.DEBUG && intent != null && "TEST_BREAK_PROXY".equals(intent.getAction())) {
+                proxy.close(); worker.execute(this::connectivityTest);
+                return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
+            }
             if (intent != null && "RELOAD".equals(intent.getAction())) worker.execute(() -> { try { store.reload(); getSharedPreferences("shield", 0).edit().putInt("rules", store.rules().size()).apply(); } catch (Exception e) { getSharedPreferences("shield", 0).edit().putString("error", e.getMessage()).apply(); } });
             else if (intent != null && "UPDATE".equals(intent.getAction())) worker.execute(this::update);
             else foreground("Filtro VPN attivo");
-            return START_STICKY;
+            return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
         }
         active = true;
         worker.execute(() -> {
@@ -50,6 +57,9 @@ public final class ShieldVpnService extends VpnService {
                 Builder builder = new Builder().setSession("GameShield").setMtu(1500)
                     .addAddress("198.18.0.1", 32).addAddress("fd42:4753::1", 128)
                     .addDnsServer("198.18.0.2").addRoute("0.0.0.0", 0).addRoute("::", 0).setBlocking(false);
+                Network physical = network.underlying();
+                lastUnderlying = physical;
+                if (physical != null) builder.setUnderlyingNetworks(new Network[]{physical});
                 tunnel = builder.establish(); if (tunnel == null) throw new IOException("Consenso VPN mancante");
                 String config = "tunnel:\n  mtu: 1500\n  ipv4: 198.18.0.1\n  ipv6: 'fd42:4753::1'\nsocks5:\n  address: 127.0.0.1\n  port: " + proxy.port() + "\n  udp: 'udp'\n  username: 'gameshield'\n  password: '" + password + "'\nmisc:\n  max-session-count: 64\n  tcp-read-write-timeout: 300000\n  log-level: error\n";
                 File file = new File(getFilesDir(), "tunnel.yml");
@@ -57,20 +67,63 @@ public final class ShieldVpnService extends VpnService {
                 if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
                 running = true;
                 }
-                getSharedPreferences("shield", 0).edit().putBoolean("wanted", true).remove("error").putInt("rules", store.rules().size()).apply();
-                foreground("Filtro VPN attivo");
+                getSharedPreferences("shield", 0).edit().putBoolean("wanted", true).putBoolean("connectivityOk", false)
+                    .putString("connectivity", "Verifica DNS, TCP 443 e HTTPS in corso…").remove("error").putInt("rules", store.rules().size()).apply();
+                foreground("Verifica connettività nel tunnel…");
                 worker.scheduleWithFixedDelay(this::health, 2, 2, TimeUnit.SECONDS);
+                worker.scheduleWithFixedDelay(this::connectivityTest, 2, 60, TimeUnit.SECONDS);
                 worker.scheduleWithFixedDelay(this::update, 1, 12 * 60 * 60, TimeUnit.SECONDS);
             } catch (Exception | LinkageError e) {
-                getSharedPreferences("shield", 0).edit().putString("error", "Avvio fallito: " + e.getMessage()).apply(); stopSelf();
+                failure("Avvio fallito: " + e.getMessage());
             }
         });
-        return START_STICKY;
+        return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
+    }
+    private void connectivityTest() {
+        if (!active || !running) return;
+        Future<String> check = probes.submit(() -> {
+            ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+            Network vpn = null;
+            for (Network n : cm.getAllNetworks()) {
+                NetworkCapabilities caps = cm.getNetworkCapabilities(n);
+                if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) { vpn = n; break; }
+            }
+            return ConnectivityProbe.check(vpn);
+        });
+        try {
+            String report = check.get(30, TimeUnit.SECONDS);
+            if (!active) return;
+            getSharedPreferences("shield", 0).edit().putBoolean("connectivityOk", true)
+                .putString("connectivity", report).remove("error").apply();
+            foreground("Filtro VPN attivo • Internet verificato");
+        } catch (Exception e) {
+            check.cancel(true);
+            if (active) failure("Self-test connettività fallito: " +
+                (e.getCause() == null ? e.getClass().getSimpleName() : e.getCause().getMessage()));
+        }
+    }
+    private void failure(String reason) {
+        getSharedPreferences("shield", 0).edit().putBoolean("connectivityOk", false)
+            .putString("error", reason + (BuildConfig.STRONG ? "; Strong mantiene la protezione" : "; VPN rimossa per ripristinare Internet. Filtro disattivato."))
+            .putString("connectivity", reason).putBoolean("wanted", BuildConfig.STRONG).apply();
+        if (BuildConfig.STRONG) { foreground("Errore connettività • serve verifica del custode"); return; }
+        // Close TUN immediately, before joining native threads: restore Android's physical routes.
+        active = false; running = false;
+        synchronized (lifecycle) {
+            if (tunnel != null) try { tunnel.close(); } catch (IOException ignored) { }
+            tunnel = null;
+        }
+        stopSelf();
     }
     private void health() {
         if (!active) return;
+        Network physical = network.underlying();
+        if (!Objects.equals(physical, lastUnderlying)) {
+            setUnderlyingNetworks(physical == null ? null : new Network[]{physical}); lastUnderlying = physical;
+        }
         if (!TProxyService.TProxyIsRunning()) {
-            running = false; getSharedPreferences("shield", 0).edit().putString("error", "Tunnel interrotto; riattiva la protezione").apply(); stopSelf(); return;
+            running = false;
+            failure("Motore tunnel interrotto"); return;
         }
         getSharedPreferences("shield", 0).edit().putLong("blocked", network.blocked.get()).apply();
     }
@@ -83,10 +136,13 @@ public final class ShieldVpnService extends VpnService {
     @Override public void onDestroy() {
         active = false; running = false;
         if (worker != null) worker.shutdownNow();
+        probes.shutdownNow();
         synchronized (lifecycle) {
+            // Release VPN routes before a potentially slow native shutdown.
+            if (tunnel != null) try { tunnel.close(); } catch (IOException ignored) { }
+            tunnel = null;
             try { TProxyService.TProxyStopService(); } catch (LinkageError ignored) { }
             if (proxy != null) proxy.close();
-            if (tunnel != null) try { tunnel.close(); } catch (IOException ignored) { }
         }
         super.onDestroy();
     }

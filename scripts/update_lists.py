@@ -135,7 +135,6 @@ def main():
     args = parser.parse_args()
     sources, warnings = {}, []
     domains = parse((ROOT / "feeds/curated.txt").read_text(encoding="utf-8"))
-    domains |= parse((ROOT / "feeds/bypass.txt").read_text(encoding="utf-8"))
     snapshot_dir = ROOT / "feeds/snapshots"
     if not args.offline:
         community = parse(fetch(HAGEZI).decode("utf-8"))
@@ -157,7 +156,8 @@ def main():
             sources[path.stem] = {"count": len(data), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
     if len(domains) < 20:
         raise ValueError("Merged feed too small")
-    content = "# GameShield: gambling domains and common DNS bypass endpoints\n" + "\n".join(sorted(domains)) + "\n"
+    domains -= parse((ROOT / "feeds/bypass.txt").read_text(encoding="utf-8"))
+    content = "# GameShield: gambling domains (DNS providers are not gambling)\n" + "\n".join(sorted(domains)) + "\n"
     atomic(ROOT / "feeds/gambling.txt", content)
     atomic(ROOT / "app/src/main/assets/gambling.txt", content)
     metadata = {"generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(), "count": len(domains), "sha256": hashlib.sha256(content.encode()).hexdigest(), "sources": sources, "warnings": warnings}

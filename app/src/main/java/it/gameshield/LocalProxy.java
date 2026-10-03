@@ -12,7 +12,8 @@ public final class LocalProxy implements AutoCloseable {
     private final ProxyNetwork network;
     private final String username, password;
     private final ServerSocket listener;
-    private final ThreadPoolExecutor workers = new ThreadPoolExecutor(0, 128, 30, TimeUnit.SECONDS, new SynchronousQueue<>());
+    private final ThreadPoolExecutor workers = new ThreadPoolExecutor(0, 192, 30, TimeUnit.SECONDS, new SynchronousQueue<>());
+    private final ThreadPoolExecutor dnsWorkers = new ThreadPoolExecutor(4, 4, 30, TimeUnit.SECONDS, new ArrayBlockingQueue<>(64));
     private final Set<Closeable> live = ConcurrentHashMap.newKeySet();
     private volatile boolean running = true;
     public LocalProxy(ProxyNetwork network, String username, String password) throws IOException {
@@ -61,9 +62,9 @@ public final class LocalProxy implements AutoCloseable {
             try (remote) {
                 reply(out, 0, remote.getLocalPort());
                 // Inspect the first TLS record on HTTPS and HTTP Host on port 80 before forwarding.
-                if (port == 443 || port == 80) {
+                if (port == 443 || port == 853 || port == 80) {
                     client.setSoTimeout(10000); byte[] first = firstFlight(in, port);
-                    String host = port == 443 ? TlsNames.sni(first) : httpHost(first);
+                    String host = port == 80 ? httpHost(first) : TlsNames.sni(first);
                     if (network.denied(host, port, false)) return;
                     remote.getOutputStream().write(first); remote.getOutputStream().flush();
                 }
@@ -97,7 +98,14 @@ public final class LocalProxy implements AutoCloseable {
                     if (port == 0) continue;
                     byte[] data = readAll(in, 65507);
                     if (network.denied(target.domain, port, true)) continue;
-                    if (port == 53) sendUdp(relay, source, target, port, network.dns(data));
+                    if ((port == 443 || port == 853) && network.denied(QuicNames.sni(data), port, true)) continue;
+                    if (port == 53) {
+                        // A slow upstream DNS request must not stall the UDP relay for every app.
+                        final InetSocketAddress clientAddress = source;
+                        try { dnsWorkers.execute(() -> {
+                            try { sendUdp(relay, clientAddress, target, port, network.dns(data)); } catch (IOException ignored) { }
+                        }); } catch (RejectedExecutionException busy) { sendUdp(relay, source, target, port, Dns.refused(data, 2)); }
+                    }
                     else {
                         InetAddress ip = target.domain == null ? target.ip : network.resolve(target.domain);
                         if (ip.isLoopbackAddress() || ip.isAnyLocalAddress() || ip.isMulticastAddress()) continue;
@@ -134,10 +142,14 @@ public final class LocalProxy implements AutoCloseable {
     }
     private static byte[] firstFlight(DataInputStream in, int port) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
-        if (port == 443) {
-            byte[] header = new byte[5]; in.readFully(header); bytes.write(header);
+        if (port != 80) {
+            int first = in.read(); if (first < 0) throw new EOFException(); bytes.write(first);
+            if (first != 22) return bytes.toByteArray();
+            byte[] header = new byte[5]; header[0] = (byte) first; in.readFully(header, 1, 4); bytes.write(header, 1, 4);
+            // Port 443 is not necessarily TLS. Never interpret arbitrary bytes as a TLS length.
+            if (header[0] != 22 || header[1] != 3) return bytes.toByteArray();
             int size = ((header[3] & 255) << 8) | (header[4] & 255);
-            if (size > 18432) throw new IOException("Invalid TLS record");
+            if (size > 18432) return bytes.toByteArray();
             byte[] payload = new byte[size]; in.readFully(payload); bytes.write(payload);
         } else {
             int last = 0;
@@ -163,7 +175,7 @@ public final class LocalProxy implements AutoCloseable {
     public static byte[] readAll(InputStream in, int limit) throws IOException { ByteArrayOutputStream out = new ByteArrayOutputStream(); byte[] b = new byte[8192]; for (int n; (n = in.read(b)) != -1;) { out.write(b, 0, n); if (out.size() > limit) throw new IOException("Too large"); } return out.toByteArray(); }
     private static void copy(InputStream in, OutputStream out) throws IOException { byte[] b = new byte[16384]; for (int n; (n = in.read(b)) != -1;) { out.write(b, 0, n); out.flush(); } }
     private static void closeResource(Closeable c) { try { c.close(); } catch (IOException ignored) {} }
-    @Override public void close() { running = false; closeResource(listener); for (Closeable c : live) closeResource(c); live.clear(); workers.shutdownNow(); }
+    @Override public void close() { running = false; closeResource(listener); for (Closeable c : live) closeResource(c); live.clear(); workers.shutdownNow(); dnsWorkers.shutdownNow(); }
     private static final class Endpoint {
         final String domain; final InetAddress ip;
         Endpoint(String domain, InetAddress ip) { this.domain = domain; this.ip = ip; }

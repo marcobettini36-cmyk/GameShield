@@ -1,4 +1,5 @@
-# Common encrypted DNS endpoints. This is not a complete anti-bypass list.
+# Migration exclusions: these DNS providers must NOT enter the gambling feed.
+# Retained to remove accidental DNS-provider rules from older snapshots/caches.
 dns.google
 cloudflare-dns.com
 mozilla.cloudflare-dns.com
