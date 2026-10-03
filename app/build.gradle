@@ -1,0 +1,41 @@
+plugins { id 'com.android.application' }
+// Git on Windows may check out POSIX header symlinks as one-line text files.
+// Materialize only those headers, within the native checkout, before NDK config.
+if (System.getProperty('os.name').toLowerCase().contains('windows')) {
+    def nativeRoot = file('../native').canonicalFile.toPath()
+    fileTree('../native') { include '**/*.h' }.each { header ->
+        if (header.length() < 256) {
+            def link = header.getText('UTF-8').trim()
+            if (link.startsWith('../') && !link.contains('\n')) {
+                def target = new File(header.parentFile, link).canonicalFile
+                if (target.toPath().startsWith(nativeRoot) && target.isFile()) header.bytes = target.bytes
+            }
+        }
+    }
+}
+android {
+    namespace 'it.gameshield'
+    compileSdk 35
+    ndkVersion '28.2.13676358'
+    defaultConfig {
+        applicationId 'it.gameshield'
+        minSdk 29
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+        externalNativeBuild { ndkBuild { arguments 'NDK_APPLICATION_MK:=' + file('../native/Application.mk').absolutePath; targets 'hev-socks5-tunnel' } }
+        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
+    }
+    flavorDimensions += 'protection'
+    productFlavors {
+        normal { dimension 'protection'; buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
+        strong { dimension 'protection'; minSdk 30; applicationIdSuffix '.strong'; buildConfigField 'boolean', 'STRONG', 'true'; resValue 'string', 'app_name', 'GameShield Strong' }
+    }
+    buildFeatures { buildConfig true }
+    externalNativeBuild { ndkBuild { path file('../native/Android.mk') } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    buildTypes { release { minifyEnabled false } }
+    lint { abortOnError true }
+}
+dependencies { testImplementation 'junit:junit:4.13.2' }

@@ -1,0 +1,54 @@
+name: Android APKs and tests
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install pinned Android tooling
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+      - name: Test feed parser
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+      - name: Build and verify both editions
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon testNormalDebugUnitTest testStrongDebugUnitTest lintNormalDebug lintStrongDebug assembleNormalDebug assembleStrongDebug assembleNormalRelease assembleStrongRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameShield-Normal-debug
+          path: app/build/outputs/apk/normal/debug/*.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameShield-Strong-debug
+          path: app/build/outputs/apk/strong/debug/*.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GameShield-release-unsigned
+          path: app/build/outputs/apk/*/release/*.apk
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-reports
+          path: |
+            app/build/reports/
+            feeds/metadata.json

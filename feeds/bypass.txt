@@ -1,0 +1,10 @@
+# Common encrypted DNS endpoints. This is not a complete anti-bypass list.
+dns.google
+cloudflare-dns.com
+mozilla.cloudflare-dns.com
+dns.quad9.net
+doh.opendns.com
+dns.nextdns.io
+dns.adguard-dns.com
+doh.cleanbrowsing.org
+dns.controld.com

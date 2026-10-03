@@ -1,0 +1,63 @@
+# GameShield
+
+App Android per ridurre l'accesso al gioco d'azzardo online, con due APK: **Normal** (Android 10+) e **Strong** (Android 11+, dispositivo dedicato provisionato come Device Owner).
+
+## Funzioni
+
+- VPN locale completa IPv4/IPv6 con motore tun2socks HEV, TCP e UDP; nessun server VPN remoto.
+- DNS locale: domini e sottodomini bloccati con NXDOMAIN, verifica CNAME/DNAME, DNS UDP e TCP. Resolver per richieste consentite: Cloudflare e Quad9.
+- Filtro aggiuntivo HTTP Host e TLS SNI su porte 80/443; blocco DoT/DoQ (853), QUIC (UDP 443) e alcuni endpoint DoH noti. HTTPS non viene decifrato.
+- Blacklist GPLv3 HaGeZi Gambling, domini italiani curati e importazione dei PDF ADM quando disponibili. Snapshot inclusa nell'APK; aggiornamenti HTTPS ogni 12 ore mentre la VPN è attiva; sostituzione atomica e mantenimento dell'ultima lista valida in caso di errore.
+- Aggiunta locale di domini/mirror e verifica della lista. Nessuna eccezione che permetta al normale utente di rimuovere blocchi Strong.
+- Notifica persistente, ripresa dopo riavvio, statistiche aggregate per sessione, collegamento all'autoesclusione ADM.
+- Strong: anti-disinstallazione Device Owner, always-on/lockdown, restrizioni debug/modifica VPN/safe boot/ripristino dalle impostazioni/nuovi utenti; codice custode PBKDF2-HMAC-SHA256 (210000 iterazioni, sale casuale), confronto costante, attese crescenti dopo errori e rilascio offline.
+
+## Build riproducibile
+
+```sh
+git clone --recurse-submodules https://github.com/marcobettini36-cmyk/GameShield.git
+cd GameShield
+# JDK 17, SDK Android 35, NDK 28.2.13676358; local.properties con sdk.dir se necessario
+./gradlew testNormalDebugUnitTest testStrongDebugUnitTest lintNormalDebug lintStrongDebug assembleNormalDebug assembleStrongDebug
+```
+
+Su Windows usare `gradlew.bat`. Gradle materializza gli header linkati del submodule su Windows. Il wrapper è Gradle 8.11.1, AGP 8.10.1; il motore è fissato al commit `2cdc169a248ced7097a7931aea5bf81540dc7759` e le sue dipendenze ai gitlink di quel commit. ABI arm64-v8a, armeabi-v7a e x86_64; allineamento nativo a 16 KB.
+
+Gli APK debug sono in `app/build/outputs/apk/{normal,strong}/debug/`. GitHub Actions esegue test, lint e build di entrambe le varianti su ogni push/PR e offre APK come artifact. Gli APK release sono **non firmati**: prima della distribuzione firmarli con una chiave stabile custodita dal proprietario. Le chiavi debug servono ai test e possono cambiare tra runner CI: non usarle per una flotta Strong.
+
+## Blacklist e nuovi mirror
+
+```sh
+python -m pip install -r scripts/requirements.txt
+python -m unittest discover -s scripts -p 'test_*.py' -v
+python scripts/update_lists.py
+```
+
+`feeds/metadata.json` riporta conteggio, hash e avvisi su fonti non disponibili. ADM può rifiutare lo scraping o cambiare struttura: l'ultimo snapshot viene conservato; non si dichiara un aggiornamento ADM riuscito quando non lo è. La lista curata include operatori italiani e internazionali senza classificare il loro status di licenza. HaGeZi copre ulteriori domini e mirror, ma **non esiste una garanzia di copertura di tutti i domini nuovi**.
+
+Il workflow giornaliero genera una PR di aggiornamento lista. L'amministratore deve consentire a GitHub Actions di creare PR nelle impostazioni Actions del repository e approvarle/mergerle dopo la revisione: il merge pubblica il feed usato dall'app e avvia nuove build. Si possono aggiornare manualmente `feeds/curated.txt` e `feeds/bypass.txt` e rigenerare con `--offline`.
+
+## Provisioning Strong (custode)
+
+Usare un dispositivo dedicato, senza account, appena ripristinato. Effettuare prima prove con un emulatore/dispositivo di test e mantenere il codice custode fuori dal dispositivo protetto. Non installare Normal e Strong insieme per usarle simultaneamente: Android consente una sola VPN attiva.
+
+```sh
+adb install app-strong-debug.apk
+adb shell dpm set-device-owner it.gameshield.strong/it.gameshield.AdminReceiver
+```
+
+Il custode imposta e conferma un codice di almeno 8 caratteri, attiva la VPN e verifica navigazione consentita e blocco di domini. Solo allora seleziona **Applica protezioni Device Owner**. Il consenso VPN e l'attivazione Strong sono espliciti. Strong non può trasformare un normale dispositivo già configurato in Device Owner senza provisioning.
+
+Il **Rilascio del custode** con codice corretto elimina restrizioni, always-on, anti-disinstallazione e Device Owner, poi ferma la VPN. Il rilascio funziona offline ed è intenzionalmente definitivo; per riattivare Device Owner servirà nuovo provisioning. Un codice perso non dispone di backdoor di recupero. Lockdown può interrompere Internet in caso di guasto del tunnel; l'app e il rilascio restano accessibili.
+
+## Limiti e verifiche su dispositivo
+
+DNS cifrato personalizzato, ECH, SNI diviso tra record TLS, tunnel applicativi, IP diretti e nuovi domini non censiti possono aggirare il filtro. Il blocco UDP 443 forza il fallback a HTTPS TCP nelle applicazioni compatibili; applicazioni solo QUIC possono non funzionare. Non è implementata ispezione contenuti HTTPS, classificazione AI o scoperta attiva di domini. VPN concorrenti non sono supportate. Non promette anti-disinstallazione assoluta contro root, bootloader sbloccato, recovery o reflash; restrizioni OEM vanno provate.
+
+La compilazione e i test JVM non certificano il comportamento sul dispositivo. Prima dell'uso reale seguire `docs/DEVICE_TESTS.md`, inclusi cambio rete, riavvio, DNS cifrato, lockdown, codice errato e rilascio. Il proxy ha limiti di concorrenza (64 sessioni native, massimo 128 worker); non è un gateway general purpose ad alte prestazioni.
+
+## Privacy e licenze
+
+Traffico inoltrato dal dispositivo direttamente alle destinazioni; nessuna cronologia di domini persistente, telemetria o account. I resolver DNS vedono le richieste consentite e il feed HTTPS contatta GitHub. Codice custode salvato solo come hash salato nello storage privato; backup Android disabilitato. Nessun certificato CA installato.
+
+Codice GameShield e lista HaGeZi: GPL-3.0, vedi `LICENSE` e `THIRD_PARTY_NOTICES.md`. La disponibilità dei blocchi non sostituisce autoesclusione e supporto professionale.
