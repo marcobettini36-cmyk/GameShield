@@ -11,14 +11,16 @@ def adb(*args, timeout=60):
     if p.returncode: raise RuntimeError(p.stdout + p.stderr)
     return p.stdout
 adb('shell', 'settings', 'delete', 'global', 'private_dns_specifier')
-for edition in ('normal', 'strong'):
+editions = (sys.argv[2],) if len(sys.argv) > 2 else ('normal', 'strong')
+modes = (sys.argv[3],) if len(sys.argv) > 3 else ('off', 'opportunistic')
+for edition in editions:
     package = 'it.gameshield' + ('.strong' if edition == 'strong' else '')
     for name in (f'app-{edition}-debug.apk', f'app-{edition}-debug-androidTest.apk'):
         matches = list(apks.rglob(name))
         if len(matches) != 1: raise RuntimeError(f'Expected one {name}, got {matches}')
         adb('install', '-r', str(matches[0]), timeout=120)
     adb('shell', 'appops', 'set', package, 'ACTIVATE_VPN', 'allow')
-    if edition == 'normal':
+    if edition == 'normal' and 'off' in modes:
         adb('logcat', '-c')
         preflight = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
             'it.gameshield.TunnelDeviceTest#testNativeTcpFinAndHalfClose',
@@ -27,7 +29,7 @@ for edition in ('normal', 'strong'):
         (reports / 'startup-preflight-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldVpn:I', 'GameShieldTransport:I', 'AndroidRuntime:E', 'ActivityManager:I', '*:S'))
         print(preflight, flush=True)
         if 'OK (1 test)' not in preflight: raise RuntimeError('Native TUN startup/FIN preflight failed')
-    for mode in ('off', 'opportunistic'):
+    for mode in modes:
         adb('shell', 'settings', 'put', 'global', 'private_dns_mode', mode)
         adb('logcat', '-c')
         result = adb('shell', 'am', 'instrument', '-w', '-r',

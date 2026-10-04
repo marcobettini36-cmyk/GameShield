@@ -70,7 +70,12 @@ jobs:
   device:
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [normal, strong]
+        dns: [off, opportunistic]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -90,9 +95,9 @@ jobs:
           target: google_apis_playstore
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: python3 scripts/device_tests.py device-apks
+          script: python3 scripts/device_tests.py device-apks ${{ matrix.edition }} ${{ matrix.dns }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: native-tunnel-device-reports
+          name: native-tunnel-device-reports-${{ matrix.edition }}-${{ matrix.dns }}
           path: device-reports/
