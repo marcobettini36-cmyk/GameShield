@@ -55,7 +55,12 @@ public class TunnelDeviceTest {
         for (String host : ConnectivityProbe.HOSTS) {
             byte[] reply = dns(tunnel, host); assertEquals(host, 0, reply[3] & 15);
             InetAddress[] addresses = tunnel.getAllByName(host); assertTrue(host, addresses.length > 0);
-            try (Socket socket = new Socket()) { tunnel.bindSocket(socket); socket.connect(new InetSocketAddress(addresses[0],443),10000); }
+            boolean connected = false;
+            for (InetAddress address : addresses) {
+                try (Socket socket = new Socket()) { tunnel.bindSocket(socket); socket.connect(new InetSocketAddress(address,443),5000); connected = true; break; }
+                catch (IOException unavailableFamily) { /* IPv4-only emulator may still receive AAAA replies. */ }
+            }
+            assertTrue(host+" TCP 443", connected);
             https(tunnel, host, addresses);
         }
         https(tunnel, "dns.google", null); // Secure DNS provider is accessible, not classified as gambling.

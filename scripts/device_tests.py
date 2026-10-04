@@ -7,7 +7,7 @@ def adb(*args, timeout=60):
     p = subprocess.run(['adb', *args], capture_output=True, text=True, timeout=timeout)
     if p.returncode: raise RuntimeError(p.stdout + p.stderr)
     return p.stdout
-adb('shell', 'settings', 'put', 'global', 'private_dns_specifier', '')
+adb('shell', 'settings', 'delete', 'global', 'private_dns_specifier')
 for edition in ('normal', 'strong'):
     package = 'it.gameshield' + ('.strong' if edition == 'strong' else '')
     for name in (f'app-{edition}-debug.apk', f'app-{edition}-debug-androidTest.apk'):
