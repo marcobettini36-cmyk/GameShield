@@ -34,6 +34,8 @@ for edition in ('normal', 'strong'):
             package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=900)
         (reports / f'{edition}-{mode}.txt').write_text(result)
         (reports / f'{edition}-{mode}-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldDeviceTest:I', 'GameShieldTransport:I', 'GameShieldConnectivity:I', 'GameShieldVpn:I', 'AndroidRuntime:E', '*:S'))
+        (reports / f'{edition}-{mode}-crash.txt').write_text(adb('logcat', '-b', 'crash', '-d'))
+        (reports / f'{edition}-{mode}-network.txt').write_text(adb('shell', 'dumpsys', 'connectivity') + adb('shell', 'dumpsys', 'dnsresolver'))
         for extension in ('png', 'xml'):
             subprocess.run(['adb', 'pull', '/sdcard/gameshield-store.' + extension,
                 str(reports / f'{edition}-{mode}-store.{extension}')], check=False, capture_output=True)

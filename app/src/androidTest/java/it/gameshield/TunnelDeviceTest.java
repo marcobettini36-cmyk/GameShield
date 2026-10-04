@@ -252,7 +252,9 @@ public class TunnelDeviceTest {
                     }
                 }
                 for(android.view.accessibility.AccessibilityNodeInfo bar:root.findAccessibilityNodeInfosByViewId("com.android.chrome:id/url_bar")) {
-                    if(bar.getText()!=null && bar.getText().toString().contains("google") && last.contains("Google")
+                    boolean content=last.contains("Google Search") || last.contains("Images") || last.contains("Gmail")
+                        || last.contains("Before you continue");
+                    if(bar.getText()!=null && bar.getText().toString().contains("google") && content
                             && !last.contains("ERR_") && !last.contains("This site can")) page=true;
                 }
                 if(page) break;

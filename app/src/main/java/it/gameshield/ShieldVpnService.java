@@ -101,9 +101,13 @@ public final class ShieldVpnService extends VpnService {
     private void deactivate() {
         active = false; running = false;
         synchronized (lifecycle) {
+            transportGeneration++;
+            // JNI borrows this fd: join its I/O thread BEFORE Java releases/reuses it.
+            // Closing it first lets native epoll/read touch an unrelated newly allocated fd.
+            if (proxy != null) proxy.close();
+            try { TProxyService.TProxyStopService(); } catch(LinkageError ignored) { }
             if (tunnel != null) try { tunnel.close(); } catch(IOException ignored) { }
             tunnel = null;
-            if (proxy != null) proxy.close();
         }
     }
     private void connectivityTest() {
@@ -172,8 +176,8 @@ public final class ShieldVpnService extends VpnService {
                     if (!active) return;
                     running = false;
                     try {
+                        proxy.close(); TProxyService.TProxyStopService();
                         if (tunnel != null) tunnel.close(); tunnel = null;
-                        TProxyService.TProxyStopService(); proxy.close();
                         establishTransport(ipv6);
                     } catch(Exception | LinkageError error) { failure("Cambio famiglia rete fallito: " + error.getMessage()); return; }
                 }
@@ -196,11 +200,10 @@ public final class ShieldVpnService extends VpnService {
         if (worker != null) worker.shutdownNow();
         probes.shutdownNow();
         synchronized (lifecycle) {
-            // Release VPN routes before a potentially slow native shutdown.
+            if (proxy != null) proxy.close();
+            try { TProxyService.TProxyStopService(); } catch (LinkageError ignored) { }
             if (tunnel != null) try { tunnel.close(); } catch (IOException ignored) { }
             tunnel = null;
-            try { TProxyService.TProxyStopService(); } catch (LinkageError ignored) { }
-            if (proxy != null) proxy.close();
         }
         super.onDestroy();
     }
