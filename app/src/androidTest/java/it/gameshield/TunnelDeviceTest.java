@@ -233,7 +233,7 @@ public class TunnelDeviceTest {
             android.view.accessibility.AccessibilityNodeInfo root=automation.getRootInActiveWindow();
             if(root!=null) {
                 StringBuilder texts=new StringBuilder(); collect(root,texts); last=texts.toString();
-                for(String text:new String[]{"Use without an account","Accept & continue","No thanks","Got it"}) {
+                for(String text:new String[]{"Use without an account","Accept & continue","No thanks","Got it","Don't allow","Not now"}) {
                     for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text)) {
                         if(node.getText()==null || !text.equals(node.getText().toString())) continue;
                         for(int parent=0;parent<4 && node!=null;parent++,node=node.getParent())
@@ -255,6 +255,7 @@ public class TunnelDeviceTest {
     }
     private void collect(android.view.accessibility.AccessibilityNodeInfo node,StringBuilder text) {
         if(node.getText()!=null) text.append(node.getText()).append(' ');
+        if(node.getContentDescription()!=null) text.append(node.getContentDescription()).append(' ');
         for(int i=0;i<node.getChildCount();i++) { android.view.accessibility.AccessibilityNodeInfo child=node.getChild(i); if(child!=null) collect(child,text); }
     }
     private byte[] dns(Network network, String host) throws IOException {
