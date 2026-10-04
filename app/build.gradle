@@ -33,6 +33,14 @@ if (!tunnelText.contains('GameShield: drain orphan closing PCBs')) {
     tunnelSource.setText(tunnelText.replace(cleanupAnchor,
         file('../native-patches/tcp-shutdown.txt').getText('UTF-8') + cleanupAnchor), 'UTF-8')
 }
+def timerText = tunnelSource.getText('UTF-8').replace('\r\n', '\n')
+def timerCondition = 'if (tcp_active_pcbs || tcp_tw_pcbs || hev_list_first (&session_set))'
+if (!timerText.contains(timerCondition)) {
+    def timerAnchor = 'if (hev_list_first (&session_set))'
+    if (!timerText.contains(timerAnchor)) throw new GradleException('Native TCP closing timer patch mismatch')
+    // FIN retransmission and TIME_WAIT belong to lwIP after a relay session finishes.
+    tunnelSource.setText(timerText.replace(timerAnchor, timerCondition), 'UTF-8')
+}
 // Materialize only those headers, within the native checkout, before NDK config.
 if (System.getProperty('os.name').toLowerCase().contains('windows')) {
     def nativeRoot = file('../native').canonicalFile.toPath()
