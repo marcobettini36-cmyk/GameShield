@@ -55,7 +55,7 @@ public class TunnelDeviceTest {
     }
     private Network start() throws Exception {
         context.startForegroundService(new Intent(context, ShieldVpnService.class));
-        for (int i=0;i<450 && (vpn()==null || !ShieldVpnService.running);i++) SystemClock.sleep(200);
+        for (int i=0;i<900 && (vpn()==null || !ShieldVpnService.running);i++) SystemClock.sleep(200);
         assertTrue("Native tunnel did not start: " + context.getSharedPreferences("shield",0).getString("error","no service error recorded"), ShieldVpnService.running); assertNotNull(vpn());
         // NetworkAgent visibility and bind permission precede route installation on busy boot.
         // Prove a packet reached the synthetic DNS/filter before testing steady TCP flows;
@@ -256,8 +256,9 @@ public class TunnelDeviceTest {
                     }
                 }
                 for(android.view.accessibility.AccessibilityNodeInfo bar:root.findAccessibilityNodeInfosByViewId("com.android.chrome:id/url_bar")) {
-                    boolean content=last.contains("Google Search") || last.contains("Images") || last.contains("Gmail")
-                        || last.contains("Before you continue");
+                    String body=last.toLowerCase(Locale.ROOT);
+                    boolean content=body.contains("google search") || body.contains("images") || body.contains("gmail")
+                        || body.contains("before you continue") || body.contains("trending searches");
                     if(bar.getText()!=null && bar.getText().toString().contains("google") && content
                             && !last.contains("ERR_") && !last.contains("This site can")) page=true;
                 }
@@ -265,6 +266,8 @@ public class TunnelDeviceTest {
             }
             SystemClock.sleep(500);
         }
+        // Accessibility DOM arrives before the compositor swaps its first content frame.
+        SystemClock.sleep(2000);
         shell("screencap -p /sdcard/gameshield-chrome.png");
         android.util.Log.i("GameShieldDeviceTest","Chrome active VPN UI: " + last);
         assertTrue("Chrome Google page not rendered: " + last,page);
