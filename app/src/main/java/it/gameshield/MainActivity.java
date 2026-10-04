@@ -40,6 +40,7 @@ public final class MainActivity extends Activity {
         start = button(card, "Attiva protezione", this::startProtection);
         stop = button(card, "Disattiva protezione", () -> {
             if (new StrongPolicy(this).locked()) { toast("Serve il rilascio del custode"); return; }
+            if (!BuildConfig.STRONG) { startActivity(new Intent().setClassName(this, "it.gameshield.NormalDisableActivity")); return; }
             prefs.edit().putBoolean("wanted", false).apply(); startService(new Intent(this, ShieldVpnService.class).setAction("STOP")); renderStatus();
         });
         button(card, "Aggiorna blacklist", () -> {
@@ -64,6 +65,7 @@ public final class MainActivity extends Activity {
                 .setMessage("Su dispositivo di test appena ripristinato, senza account, installa solo Strong e usa ADB:\n\nadb shell dpm set-device-owner it.gameshield.strong/it.gameshield.AdminReceiver\n\nPoi il custode imposta il codice, verifica che la VPN navighi e applica le protezioni. Le restrizioni possono dipendere dal produttore. Non applicarle al tuo unico dispositivo senza aver provato il rilascio.")
                 .setPositiveButton("Chiudi", null).show());
         }
+        if (!BuildConfig.STRONG) button(root, "Impostazioni Normal", () -> startActivity(new Intent().setClassName(this, "it.gameshield.NormalSettingsActivity")));
         LinearLayout tools = card(root); tools.addView(text("Le tue regole", 21, 0xff072d36));
         button(tools, "Aggiungi dominio o mirror", () -> input("Blocca un dominio", false, value -> {
             String domain = DomainRules.normalize(value); if (domain == null) { toast("Inserisci un dominio, senza https o percorso"); return; }

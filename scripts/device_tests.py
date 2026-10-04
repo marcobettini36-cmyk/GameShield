@@ -32,7 +32,7 @@ for edition in editions:
     for mode in modes:
         adb('shell', 'settings', 'put', 'global', 'private_dns_mode', mode)
         adb('logcat', '-c')
-        result = adb('shell', 'am', 'instrument', '-w', '-r',
+        result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.TunnelDeviceTest',
             package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=900)
         (reports / f'{edition}-{mode}.txt').write_text(result)
         (reports / f'{edition}-{mode}-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldDeviceTest:I', 'GameShieldTransport:I', 'GameShieldConnectivity:I', 'GameShieldVpn:I', 'AndroidRuntime:E', '*:S'))
@@ -45,4 +45,15 @@ for edition in editions:
             str(reports / f'{edition}-{mode}-chrome.png')], check=False, capture_output=True)
         print(f'{edition}/{mode}:\n{result}', flush=True)
         if 'OK (5 tests)' not in result or 'FAILURES' in result: raise RuntimeError('Native tunnel instrumentation failed')
+        if edition == 'normal':
+            adb('logcat', '-c')
+            ui_result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                'it.gameshield.NormalDisableDeviceTest',
+                package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=600)
+            (reports / f'{edition}-{mode}-disable-ui.txt').write_text(ui_result)
+            (reports / f'{edition}-{mode}-disable-ui-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldVpn:I', 'GameShieldConnectivity:I', 'AndroidRuntime:E', '*:S'))
+            print(ui_result, flush=True)
+            if 'OK (2 tests)' not in ui_result or 'FAILURES' in ui_result:
+                raise RuntimeError('Normal deactivation UI tests failed')
+
     adb('shell', 'am', 'force-stop', package)

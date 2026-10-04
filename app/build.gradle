@@ -77,7 +77,7 @@ android {
     }
     flavorDimensions += 'protection'
     productFlavors {
-        normal { dimension 'protection'; buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
+        normal { versionCode 4; versionName '0.3.1'; dimension 'protection'; buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
         strong { dimension 'protection'; minSdk 30; applicationIdSuffix '.strong'; buildConfigField 'boolean', 'STRONG', 'true'; resValue 'string', 'app_name', 'GameShield Strong' }
     }
     buildFeatures { buildConfig true }
