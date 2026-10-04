@@ -1,5 +1,4 @@
 package it.gameshield;
-
 import android.app.*;
 import android.content.*;
 import android.net.VpnService;
@@ -11,7 +10,6 @@ import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.*;
 import hev.htproxy.TProxyService;
-
 public final class ShieldVpnService extends VpnService {
     private ParcelFileDescriptor tunnel;
     private LocalProxy proxy;
@@ -20,7 +18,9 @@ public final class ShieldVpnService extends VpnService {
     private ScheduledExecutorService worker;
     private final ExecutorService probes = Executors.newSingleThreadExecutor();
     private volatile boolean active;
-    private Network lastUnderlying;
+    private volatile Network lastUnderlying;
+    private int consecutiveOutages;
+    private final java.util.concurrent.atomic.AtomicBoolean checking = new java.util.concurrent.atomic.AtomicBoolean();
     private final Object lifecycle = new Object();
     public static volatile boolean running;
     @Override public void onCreate() {
@@ -61,7 +61,7 @@ public final class ShieldVpnService extends VpnService {
                 lastUnderlying = physical;
                 if (physical != null) builder.setUnderlyingNetworks(new Network[]{physical});
                 tunnel = builder.establish(); if (tunnel == null) throw new IOException("Consenso VPN mancante");
-                String config = "tunnel:\n  mtu: 1500\n  ipv4: 198.18.0.1\n  ipv6: 'fd42:4753::1'\nsocks5:\n  address: 127.0.0.1\n  port: " + proxy.port() + "\n  udp: 'udp'\n  username: 'gameshield'\n  password: '" + password + "'\nmisc:\n  max-session-count: 64\n  tcp-read-write-timeout: 300000\n  log-level: error\n";
+                String config = "tunnel:\n  mtu: 1500\n  ipv4: 198.18.0.1\n  ipv6: 'fd42:4753::1'\nsocks5:\n  address: 127.0.0.1\n  port: " + proxy.port() + "\n  udp: 'udp'\n  username: 'gameshield'\n  password: '" + password + "'\nmisc:\n  max-session-count: 128\n  tcp-read-write-timeout: 1800000\n  log-level: error\n";
                 File file = new File(getFilesDir(), "tunnel.yml");
                 try (FileOutputStream out = new FileOutputStream(file)) { out.write(config.getBytes(StandardCharsets.UTF_8)); }
                 if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
@@ -71,7 +71,7 @@ public final class ShieldVpnService extends VpnService {
                     .putString("connectivity", "Verifica DNS, TCP 443 e HTTPS in corso…").remove("error").putInt("rules", store.rules().size()).apply();
                 foreground("Verifica connettività nel tunnel…");
                 worker.scheduleWithFixedDelay(this::health, 2, 2, TimeUnit.SECONDS);
-                worker.scheduleWithFixedDelay(this::connectivityTest, 2, 60, TimeUnit.SECONDS);
+                worker.scheduleWithFixedDelay(this::connectivityTest, 2, 15, TimeUnit.SECONDS);
                 worker.scheduleWithFixedDelay(this::update, 1, 12 * 60 * 60, TimeUnit.SECONDS);
             } catch (Exception | LinkageError e) {
                 failure("Avvio fallito: " + e.getMessage());
@@ -80,8 +80,9 @@ public final class ShieldVpnService extends VpnService {
         return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
     }
     private void connectivityTest() {
-        if (!active || !running) return;
-        Future<String> check = probes.submit(() -> {
+        if (!active || !running || !checking.compareAndSet(false, true)) return;
+        Network initialPhysical = network.underlying();
+        Future<ConnectivityProbe.Result> check = probes.submit(() -> {
             ConnectivityManager cm = getSystemService(ConnectivityManager.class);
             Network vpn = null;
             for (Network n : cm.getAllNetworks()) {
@@ -91,16 +92,33 @@ public final class ShieldVpnService extends VpnService {
             return ConnectivityProbe.check(vpn);
         });
         try {
-            String report = check.get(30, TimeUnit.SECONDS);
+            ConnectivityProbe.Result result = check.get(120, TimeUnit.SECONDS);
             if (!active) return;
-            getSharedPreferences("shield", 0).edit().putBoolean("connectivityOk", true)
-                .putString("connectivity", report).remove("error").apply();
-            foreground("Filtro VPN attivo • Internet verificato");
+            String report = result.toString();
+            boolean physicalWorks = false;
+            if (!result.usable() && initialPhysical != null) {
+                Future<ConnectivityProbe.Result> baseline = probes.submit(() -> ConnectivityProbe.check(initialPhysical, false));
+                try { physicalWorks = baseline.get(120, TimeUnit.SECONDS).usable(); }
+                catch (Exception error) { baseline.cancel(true); }
+            }
+            // A host outage, offline phone or network handover is not evidence of a broken tunnel.
+            boolean confirmedOutage = !result.usable() && physicalWorks
+                && Objects.equals(initialPhysical, network.underlying());
+            consecutiveOutages = confirmedOutage ? consecutiveOutages + 1 : 0;
+            report += confirmedOutage ? "\nTunnel inutilizzabile, rete fisica OK: tentativo " + consecutiveOutages + "/3"
+                : (!result.usable() ? "\nRete fisica non verificata o in transizione: VPN mantenuta" : "");
+            android.util.Log.i("GameShieldConnectivity", report);
+            getSharedPreferences("shield", 0).edit().putBoolean("connectivityOk", result.complete())
+                .putString("connectivity", report).putInt("consecutiveOutages", consecutiveOutages).remove("error").apply();
+            if (consecutiveOutages >= 3) { failure("Tre verifiche consecutive: nessun HTTPS nel tunnel, HTTPS fisico funzionante. " + report); return; }
+            foreground(result.complete() ? "Filtro VPN attivo  /  Internet verificato" : "VPN attiva  /  verifica connettivita parziale");
         } catch (Exception e) {
             check.cancel(true);
-            if (active) failure("Self-test connettività fallito: " +
-                (e.getCause() == null ? e.getClass().getSimpleName() : e.getCause().getMessage()));
-        }
+            // A timeout or interrupted diagnostic does not prove a data-path outage.
+            consecutiveOutages = 0;
+            if (active) getSharedPreferences("shield", 0).edit().putBoolean("connectivityOk", false)
+                .putString("connectivity", "Self-test incompleto; VPN mantenuta: " + e).apply();
+        } finally { checking.set(false); }
     }
     private void failure(String reason) {
         getSharedPreferences("shield", 0).edit().putBoolean("connectivityOk", false)

@@ -24,6 +24,7 @@ public class TunnelDeviceTest {
     @Before public void setUp() throws Exception {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext(); cm = context.getSystemService(ConnectivityManager.class);
         context.stopService(new Intent(context, ShieldVpnService.class)); SystemClock.sleep(1000);
+        context.getSharedPreferences("shield",0).edit().remove("custom").commit();
         for (Network n : cm.getAllNetworks()) {
             NetworkCapabilities caps = cm.getNetworkCapabilities(n);
             if (caps != null && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
@@ -81,11 +82,14 @@ public class TunnelDeviceTest {
             SystemClock.sleep(35000); assertNotNull("Strong must retain TUN on forwarding failure", vpn());
             assertFalse(context.getSharedPreferences("shield",0).getBoolean("connectivityOk",true));
         } else {
-            for(int i=0;i<225 && vpn()!=null;i++) SystemClock.sleep(200);
+            for(int i=0;i<300 && context.getSharedPreferences("shield",0).getInt("consecutiveOutages",0)==0;i++) SystemClock.sleep(200);
+            assertNotNull("One diagnostic failure must not remove VPN",vpn());
+            assertEquals(1,context.getSharedPreferences("shield",0).getInt("consecutiveOutages",0));
+            for(int i=0;i<900 && vpn()!=null;i++) SystemClock.sleep(200);
             assertNull("Normal must release TUN after failed forwarding",vpn());
             assertFalse(ShieldVpnService.running);
             assertFalse(context.getSharedPreferences("shield",0).getBoolean("wanted",true));
-            https(physical,"google.com",null);
+            for(String host:ConnectivityProbe.HOSTS) https(physical,host,null);
         }
     }
     @Test public void testChromiumWebViewBrowsingThroughVpn() throws Exception {
@@ -122,6 +126,73 @@ public class TunnelDeviceTest {
             }
         } finally {
             InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> { browser.get().destroy(); activity.finish(); });
+        }
+    }
+    @Test public void testStableConcurrentBrowsingAndManualBlock() throws Exception {
+        Network tunnel = start();
+        // Three minutes, spanning multiple health/self-test cycles. No protected sockets here.
+        ExecutorService clients = Executors.newFixedThreadPool(4);
+        long until = SystemClock.elapsedRealtime() + 180000;
+        int rounds = 0;
+        try {
+            do {
+                List<Future<?>> requests = new ArrayList<>();
+                for (String host : ConnectivityProbe.HOSTS) requests.add(clients.submit(() -> {
+                    try { https(tunnel, host, null); } catch(IOException e) { throw new RuntimeException(e); }
+                }));
+                for(Future<?> request:requests) request.get(60,TimeUnit.SECONDS);
+                assertTrue("Native engine stopped",ShieldVpnService.running);
+                assertEquals("VPN was removed/replaced during normal traffic",tunnel,vpn());
+                rounds++; SystemClock.sleep(3000);
+            } while(SystemClock.elapsedRealtime()<until);
+            https(tunnel,"play.google.com",null);
+            https(tunnel,"android.clients.google.com",null);
+            String store = shell("am start -n com.android.vending/com.google.android.finsky.activities.MainActivity");
+            assertFalse("Google Play launch failed: " + store, store.contains("Error"));
+            SystemClock.sleep(8000);
+            shell("screencap -p /sdcard/gameshield-store.png");
+            shell("uiautomator dump /sdcard/gameshield-store.xml");
+            assertEquals("Play Store must not remove VPN",tunnel,vpn());
+            android.util.Log.i("GameShieldDeviceTest","Stable VPN: " + rounds + " concurrent rounds over 180 seconds; Google Play HTTPS endpoints OK");
+            // Exercise the same stored custom list and RELOAD path as the user interface.
+            context.getSharedPreferences("shield",0).edit().putString("custom","example.com").commit();
+            context.startForegroundService(new Intent(context,ShieldVpnService.class).setAction("RELOAD"));
+            boolean blocked=false;
+            for(int i=0;i<60;i++) { if((dns(tunnel,"example.com")[3]&15)==3) { blocked=true; break; } SystemClock.sleep(500); }
+            assertTrue("User domain must be blocked",blocked);
+            https(tunnel,"google.it",null);
+            assertEquals(tunnel,vpn());
+        } finally { clients.shutdownNow(); context.getSharedPreferences("shield",0).edit().remove("custom").commit(); }
+        context.stopService(new Intent(context,ShieldVpnService.class));
+        for(int i=0;i<100 && vpn()!=null;i++) SystemClock.sleep(200);
+        assertNull("Normal stop must restore ordinary routes",vpn());
+        for(String host:ConnectivityProbe.HOSTS) https(physical,host,null);
+    }
+    @Test public void testNativeTcpFinAndHalfClose() throws Exception {
+        Network tunnel = start();
+        for(int round=0;round<20;round++) {
+            try(Socket socket=new Socket()) {
+                tunnel.bindSocket(socket); socket.connect(new InetSocketAddress("10.0.2.2",18080),5000); socket.setSoTimeout(10000);
+                socket.getOutputStream().write("EOF\n".getBytes(StandardCharsets.US_ASCII)); socket.shutdownOutput();
+                byte[] received=LocalProxy.readAll(socket.getInputStream(),100000);
+                assertEquals("Native EOF must not reset/truncate",65536,received.length);
+                for(byte b:received) assertEquals('x',b);
+            }
+            try(Socket socket=new Socket()) {
+                tunnel.bindSocket(socket); socket.connect(new InetSocketAddress("10.0.2.2",18080),5000); socket.setSoTimeout(10000);
+                socket.getOutputStream().write("HALF\n".getBytes(StandardCharsets.US_ASCII)); socket.getOutputStream().flush();
+                assertEquals("ready",new String(LocalProxy.readAll(socket.getInputStream(),100),StandardCharsets.US_ASCII));
+                byte[] upload=new byte[65536]; Arrays.fill(upload,(byte)'y');
+                socket.getOutputStream().write(upload); socket.shutdownOutput();
+            }
+        }
+        assertEquals(tunnel,vpn());
+        android.util.Log.i("GameShieldDeviceTest","40 native TCP FIN / half-close transfers passed without reset");
+    }
+    private String shell(String command) throws IOException {
+        try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);
+            InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)) {
+            return new String(LocalProxy.readAll(input,1000000),StandardCharsets.UTF_8);
         }
     }
     private byte[] dns(Network network, String host) throws IOException {

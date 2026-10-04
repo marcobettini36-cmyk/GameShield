@@ -1,0 +1,10 @@
+        /* GameShield: a completed stream must finish with FIN, not unconditional RST.
+         * Clear all callbacks before handing PCB lifetime back to lwIP. Keep abort
+         * for failed/incomplete transfers and allocation failure only. */
+        if (self->clean_eof) {
+            if (tcp_close (self->pcb) != ERR_OK)
+                tcp_abort (self->pcb);
+        } else {
+            tcp_abort (self->pcb);
+        }
+        self->pcb = NULL;

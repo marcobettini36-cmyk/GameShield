@@ -55,6 +55,45 @@ public class LocalProxyTest {
             peer.join(3000); assertFalse(peer.isAlive()); assertEquals(1, n.connects.get());
         }
     }
+    @Test public void serverHalfCloseDoesNotAbortClientUpload() throws Exception {
+        Network n = new Network(); byte[] payload = new byte[65536]; Arrays.fill(payload, (byte)42);
+        java.util.concurrent.FutureTask<byte[]> received = new java.util.concurrent.FutureTask<>(() -> new byte[0]);
+        try (ServerSocket echo = new ServerSocket(0); LocalProxy p = new LocalProxy(n, "user", "secret"); Socket c = client(p)) {
+            n.echoPort = echo.getLocalPort();
+            received = new java.util.concurrent.FutureTask<>(() -> {
+                try (Socket peer = echo.accept()) {
+                    peer.getOutputStream().write(7); peer.shutdownOutput();
+                    return LocalProxy.readAll(peer.getInputStream(), 100000);
+                }
+            }); new Thread(received).start();
+            assertTrue(auth(c, "secret")); assertTrue(request(c, 1, null, 12345) > 0);
+            assertEquals(7, c.getInputStream().read()); assertEquals(-1, c.getInputStream().read());
+            c.getOutputStream().write(payload); c.shutdownOutput();
+            assertArrayEquals(payload, received.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        }
+    }
+    @Test public void timedOutPartialTlsInspectionPreservesEveryByte() throws Exception {
+        Network n = new Network(); byte[] prefix = {22,3}; byte[] suffix = {3,0,3,1,2,3};
+        try (ServerSocket echo = new ServerSocket(0); LocalProxy p = new LocalProxy(n,"user","secret"); Socket c = client(p)) {
+            n.echoPort = echo.getLocalPort();
+            java.util.concurrent.FutureTask<byte[]> received = new java.util.concurrent.FutureTask<>(() -> {
+                try (Socket peer = echo.accept()) { return LocalProxy.readAll(peer.getInputStream(),100); }
+            }); new Thread(received).start();
+            assertTrue(auth(c,"secret")); assertTrue(request(c,1,null,443)>0);
+            c.getOutputStream().write(prefix); c.getOutputStream().flush(); Thread.sleep(2500);
+            c.getOutputStream().write(suffix); c.shutdownOutput();
+            assertArrayEquals(new byte[]{22,3,3,0,3,1,2,3},received.get(5,java.util.concurrent.TimeUnit.SECONDS));
+        }
+    }
+    @Test public void serverFirstOn443IsReturnedBeforeClientSendsAnything() throws Exception {
+        Network n = new Network();
+        try (ServerSocket echo = new ServerSocket(0); LocalProxy p = new LocalProxy(n,"user","secret"); Socket c = client(p)) {
+            n.echoPort=echo.getLocalPort();
+            new Thread(() -> { try (Socket peer=echo.accept()) { peer.getOutputStream().write(9); peer.shutdownOutput(); while(peer.getInputStream().read()!=-1){} } catch(IOException ignored){} }).start();
+            assertTrue(auth(c,"secret")); assertTrue(request(c,1,null,443)>0);
+            c.setSoTimeout(1000); assertEquals(9,c.getInputStream().read()); c.shutdownOutput();
+        }
+    }
     @Test public void framesAndFiltersTcpDns() throws Exception {
         try (LocalProxy p = new LocalProxy(new Network(), "user", "secret"); Socket c = client(p)) {
             assertTrue(auth(c, "secret")); assertTrue(request(c, 1, null, 53) >= 0);

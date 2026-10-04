@@ -12,7 +12,7 @@ public final class LocalProxy implements AutoCloseable {
     private final ProxyNetwork network;
     private final String username, password;
     private final ServerSocket listener;
-    private final ThreadPoolExecutor workers = new ThreadPoolExecutor(0, 192, 30, TimeUnit.SECONDS, new SynchronousQueue<>());
+    private final ThreadPoolExecutor workers = new ThreadPoolExecutor(0, 384, 30, TimeUnit.SECONDS, new SynchronousQueue<>());
     private final ThreadPoolExecutor dnsWorkers = new ThreadPoolExecutor(4, 4, 30, TimeUnit.SECONDS, new ArrayBlockingQueue<>(64));
     private final Set<Closeable> live = ConcurrentHashMap.newKeySet();
     private volatile boolean running = true;
@@ -29,7 +29,7 @@ public final class LocalProxy implements AutoCloseable {
         }
     }
     private void submit(Runnable task, Closeable resource) {
-        try { workers.execute(task); } catch (RejectedExecutionException e) { closeResource(resource); live.remove(resource); }
+        try { workers.execute(task); } catch (RejectedExecutionException e) { network.diagnostic("Relay capacity exhausted", new IOException(e)); closeResource(resource); live.remove(resource); }
     }
     private void handle(Socket client) {
         String phase = "SOCKS handshake";
@@ -61,25 +61,37 @@ public final class LocalProxy implements AutoCloseable {
                 return;
             }
             InetAddress address = endpoint.domain == null ? endpoint.ip : network.resolve(endpoint.domain);
+            network.event("TCP destination=" + address.getHostAddress() + ":" + port + " domain=" + endpoint.domain);
             if (address.isLoopbackAddress() || address.isAnyLocalAddress() || address.isMulticastAddress()) { reply(out, 2, 0); return; }
             phase = "protected TCP connect (port " + port + ")";
             Socket remote = network.socket(address, port); live.add(remote);
             try (remote) {
                 reply(out, 0, remote.getLocalPort());
+                // Download runs immediately: server-first TCP must not wait for a ClientHello.
+                // EOF half-closes only the corresponding output; the other direction stays alive.
+                CountDownLatch downloaded = new CountDownLatch(1);
+                client.setSoTimeout(0); remote.setSoTimeout(0);
+                try {
+                    workers.execute(() -> {
+                        try { copy(remote.getInputStream(), client.getOutputStream()); client.shutdownOutput(); }
+                        catch (IOException error) {
+                            if (running && !client.isClosed()) network.diagnostic("TCP return " + address.getHostAddress() + ":" + port, error);
+                            closeResource(client); closeResource(remote);
+                        } finally { downloaded.countDown(); }
+                    });
+                } catch (RejectedExecutionException busy) { throw new IOException("TCP return worker unavailable", busy); }
                 // Inspect the first TLS record on HTTPS and HTTP Host on port 80 before forwarding.
                 if (port == 443 || port == 853 || port == 80) {
                     phase = "first flight (port " + port + ")";
-                    client.setSoTimeout(10000); byte[] first = firstFlight(in, port);
+                    client.setSoTimeout(2000); byte[] first = firstFlight(in, port);
                     String host = port == 80 ? httpHost(first) : TlsNames.sni(first);
                     if (network.denied(host, port, false)) return;
                     remote.getOutputStream().write(first); remote.getOutputStream().flush();
                 }
-                client.setSoTimeout(300000); remote.setSoTimeout(300000);
+                client.setSoTimeout(0);
                 phase = "TCP upload";
-                submit(() -> { try { copy(remote.getInputStream(), client.getOutputStream()); client.shutdownOutput(); } catch (IOException error) { network.diagnostic("TCP return", error); } finally { closeResource(client); closeResource(remote); } }, remote);
                 try { copy(in, remote.getOutputStream()); remote.shutdownOutput();
-                    // Keep remote open until the peer finishes returning data after client half-close.
-                    while (!client.isClosed() && running) { try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; } }
+                    try { downloaded.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 } finally { closeResource(remote); }
             } finally { live.remove(remote); }
         } catch (IOException error) { network.diagnostic(phase, error); }
@@ -87,7 +99,7 @@ public final class LocalProxy implements AutoCloseable {
     }
     private void udp(Socket control, DataInputStream controlIn, DataOutputStream controlOut) throws IOException {
         Set<DatagramSocket> outboundSockets = ConcurrentHashMap.newKeySet();
-        Map<String, DatagramSocket> routes = new HashMap<>();
+        Map<String, DatagramSocket> routes = new LinkedHashMap<>(16, 0.75f, true);
         DatagramSocket relay = new DatagramSocket(0, InetAddress.getByName("127.0.0.1"));
         try (relay) {
             live.add(relay); relay.setSoTimeout(1000); reply(controlOut, 0, relay.getLocalPort()); control.setSoTimeout(0);
@@ -110,7 +122,7 @@ public final class LocalProxy implements AutoCloseable {
                         // A slow upstream DNS request must not stall the UDP relay for every app.
                         final InetSocketAddress clientAddress = source;
                         try { dnsWorkers.execute(() -> {
-                            try { sendUdp(relay, clientAddress, target, port, network.dns(data)); } catch (IOException ignored) { }
+                            try { sendUdp(relay, clientAddress, target, port, network.dns(data)); } catch (IOException error) { if (running) network.diagnostic("UDP DNS forwarding", error); }
                         }); } catch (RejectedExecutionException busy) { sendUdp(relay, source, target, port, Dns.refused(data, 2)); }
                     }
                     else {
@@ -119,8 +131,13 @@ public final class LocalProxy implements AutoCloseable {
                         String key = ip.getHostAddress() + ":" + port;
                         DatagramSocket outbound = routes.get(key);
                         if (outbound == null || outbound.isClosed()) {
-                            if (routes.size() >= 8 && outbound == null) continue;
+                            routes.entrySet().removeIf(entry -> entry.getValue().isClosed());
+                            // Bound resources, but evict the oldest route instead of black-holing new destinations.
+                            if (routes.size() >= 64 && outbound == null) {
+                                String oldest = routes.keySet().iterator().next(); routes.remove(oldest).close();
+                            }
                             outbound = network.datagram(); outbound.connect(ip, port); outbound.setSoTimeout(1000);
+                            network.event("UDP ALLOW destination=" + ip.getHostAddress() + ":" + port + " domain=" + target.domain);
                             routes.put(key, outbound); outboundSockets.add(outbound); live.add(outbound);
                             final DatagramSocket connection = outbound; final InetSocketAddress clientAddress = source;
                             submit(() -> {
@@ -131,13 +148,13 @@ public final class LocalProxy implements AutoCloseable {
                                             sendUdp(relay, clientAddress, target, port, Arrays.copyOf(response.getData(), response.getLength()));
                                         } catch (SocketTimeoutException ignored) { }
                                     }
-                                } catch (IOException ignored) { }
+                                } catch (IOException error) { if (running && !connection.isClosed()) network.diagnostic("UDP return " + key, error); }
                                 finally { connection.close(); live.remove(connection); outboundSockets.remove(connection); }
                             }, connection);
                         }
                         if (!outbound.isClosed()) outbound.send(new DatagramPacket(data, data.length));
                     }
-                } catch (SocketTimeoutException ignored) { } catch (IOException ignored) { }
+                } catch (SocketTimeoutException ignored) { } catch (IOException error) { if (running && !relay.isClosed()) network.diagnostic("UDP forwarding", error); }
             }
             live.remove(relay);
         } finally { live.remove(relay); for (DatagramSocket socket : outboundSockets) { socket.close(); live.remove(socket); } }
@@ -149,18 +166,23 @@ public final class LocalProxy implements AutoCloseable {
     }
     private static byte[] firstFlight(DataInputStream in, int port) throws IOException {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try {
         if (port != 80) {
-            int first = in.read(); if (first < 0) throw new EOFException(); bytes.write(first);
+            int first = in.read(); if (first < 0) return bytes.toByteArray(); bytes.write(first);
             if (first != 22) return bytes.toByteArray();
-            byte[] header = new byte[5]; header[0] = (byte) first; in.readFully(header, 1, 4); bytes.write(header, 1, 4);
+            byte[] header = new byte[5]; header[0] = (byte) first;
+            for (int i = 1; i < 5; i++) { int b = in.read(); if (b < 0) return bytes.toByteArray(); header[i] = (byte)b; bytes.write(b); }
             // Port 443 is not necessarily TLS. Never interpret arbitrary bytes as a TLS length.
             if (header[0] != 22 || header[1] != 3) return bytes.toByteArray();
             int size = ((header[3] & 255) << 8) | (header[4] & 255);
             if (size > 18432) return bytes.toByteArray();
-            byte[] payload = new byte[size]; in.readFully(payload); bytes.write(payload);
+            for (int i = 0; i < size; i++) { int b = in.read(); if (b < 0) break; bytes.write(b); }
         } else {
             int last = 0;
             while (bytes.size() < 16384) { int b = in.read(); if (b < 0) break; bytes.write(b); last = (last << 8) | b; if (last == 0x0d0a0d0a) break; }
+        }
+        } catch (SocketTimeoutException undecidable) {
+            // Classification is best effort. Preserve every captured byte and forward unchanged.
         }
         return bytes.toByteArray();
     }

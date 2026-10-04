@@ -18,19 +18,31 @@ public final class ProtectedNetwork implements ProxyNetwork {
     private final VpnService vpn;
     private final RuleStore store;
     private final ConnectivityManager connectivity;
+    private volatile Network selectedPhysical;
+    private final long diagnosticUntil = android.os.SystemClock.elapsedRealtime() + 15 * 60 * 1000;
     public final AtomicLong blocked = new AtomicLong();
     public ProtectedNetwork(VpnService vpn, RuleStore store) {
         this.vpn = vpn; this.store = store; connectivity = vpn.getSystemService(ConnectivityManager.class);
     }
-    public Network underlying() {
+    public synchronized Network underlying() {
         Network selected = null;
+        Network active = connectivity.getActiveNetwork();
+        NetworkCapabilities retained = selectedPhysical == null ? null : connectivity.getNetworkCapabilities(selectedPhysical);
+        if (retained != null && !retained.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                && retained.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) selected = selectedPhysical;
         for (Network candidate : connectivity.getAllNetworks()) {
             NetworkCapabilities caps = connectivity.getNetworkCapabilities(candidate);
             if (caps == null || caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
                     || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) continue;
-            if (candidate.equals(connectivity.getActiveNetwork())) return candidate;
-            if (selected == null || caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) selected = candidate;
+            if (candidate.equals(active)) { selectedPhysical = candidate; return candidate; }
+            if (selected == null) selected = candidate;
+            else {
+                NetworkCapabilities current = connectivity.getNetworkCapabilities(selected);
+                if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                        && (current == null || !current.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))) selected = candidate;
+            }
         }
+        selectedPhysical = selected;
         return selected;
     }
     public Socket socket(InetAddress ip, int port) throws IOException {
@@ -39,14 +51,18 @@ public final class ProtectedNetwork implements ProxyNetwork {
             // Android new Socket() has no kernel fd yet; protect(Socket) would return false.
             // Materialize a bound fd first, still BEFORE connect, avoiding VPN recursion.
             socket.bind(new InetSocketAddress(0));
-            if (!vpn.protect(socket)) throw new IOException("Impossibile proteggere socket");
+            boolean protectedSocket = vpn.protect(socket);
+            event("TCP protect=" + protectedSocket + " destination=" + ip.getHostAddress() + ":" + port);
+            if (!protectedSocket) throw new IOException("Impossibile proteggere socket");
             Network physical = underlying(); if (physical != null) physical.bindSocket(socket);
+            event("TCP bind physical=" + physical + " destination=" + ip.getHostAddress() + ":" + port);
             socket.connect(new InetSocketAddress(ip, port), 10000); socket.setSoTimeout(60000); return socket;
         } catch (IOException e) { socket.close(); throw e; }
     }
     public DatagramSocket datagram() throws IOException {
         DatagramSocket socket = new DatagramSocket();
-        if (!vpn.protect(socket)) { socket.close(); throw new IOException("Impossibile proteggere UDP"); }
+        boolean protectedSocket = vpn.protect(socket); event("UDP protect=" + protectedSocket);
+        if (!protectedSocket) { socket.close(); throw new IOException("Impossibile proteggere UDP"); }
         try {
             Network physical = underlying(); if (physical != null) physical.bindSocket(socket);
             socket.setSoTimeout(2500); return socket;
@@ -54,6 +70,7 @@ public final class ProtectedNetwork implements ProxyNetwork {
     }
     public byte[] dns(byte[] query) throws IOException {
         String domain = Dns.question(query);
+        event("DNS domain=" + domain + " decision=" + (store.rules().blocks(domain) ? "BLOCK" : "ALLOW"));
         if (store.rules().blocks(domain)) { blocked.incrementAndGet(); return Dns.refused(query, 3); }
         LinkedHashSet<InetAddress> resolvers = new LinkedHashSet<>();
         Network physical = underlying();
@@ -72,8 +89,9 @@ public final class ProtectedNetwork implements ProxyNetwork {
                 // Truncated responses are retried over protected TCP.
                 if ((answer[2] & 2) != 0) answer = tcpDns(query, resolver);
             } catch (IOException e) {
+                diagnostic("DNS UDP domain=" + domain + " resolver=" + resolver.getHostAddress(), e);
                 // UDP/53 is restricted on some networks. Retry TCP even on timeout, not only TC=1.
-                try { answer = tcpDns(query, resolver); } catch (IOException ignored) { continue; }
+                try { answer = tcpDns(query, resolver); } catch (IOException error) { diagnostic("DNS TCP domain=" + domain + " resolver=" + resolver.getHostAddress(), error); continue; }
             }
             if (Dns.containsBlockedAlias(answer, store.rules())) { blocked.incrementAndGet(); return Dns.refused(query, 3); }
             if ((answer[3] & 15) == 2 || (answer[3] & 15) == 5) continue;
@@ -96,10 +114,14 @@ public final class ProtectedNetwork implements ProxyNetwork {
     public boolean denied(String domain, int port, boolean udp) {
         // Ports and DNS transports are not gambling. Dropping QUIC/DoT globally breaks legitimate apps.
         boolean deny = domain != null && store.rules().blocks(domain);
+        if (domain != null) event((udp ? "UDP" : "TCP") + " domain=" + domain + " port=" + port + " decision=" + (deny ? "BLOCK" : "ALLOW"));
         if (deny) blocked.incrementAndGet(); return deny;
     }
     @Override public void diagnostic(String phase, IOException error) {
-        if (BuildConfig.DEBUG) android.util.Log.w("GameShieldTransport", phase + ": " + error.getMessage(), error);
+        if (BuildConfig.DEBUG && android.os.SystemClock.elapsedRealtime() < diagnosticUntil) android.util.Log.w("GameShieldTransport", phase + ": " + error.getClass().getSimpleName() + ": " + error.getMessage(), error);
+    }
+    @Override public void event(String message) {
+        if (BuildConfig.DEBUG && android.os.SystemClock.elapsedRealtime() < diagnosticUntil) android.util.Log.i("GameShieldTransport", message);
     }
     public byte[] downloadFeed() throws IOException {
         String host = RuleStore.FEED_HOST;

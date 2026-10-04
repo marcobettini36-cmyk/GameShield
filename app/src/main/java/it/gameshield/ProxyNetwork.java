@@ -9,4 +9,5 @@ public interface ProxyNetwork {
     InetAddress resolve(String domain) throws IOException;
     boolean denied(String domain, int port, boolean udp);
     default void diagnostic(String phase, IOException error) { }
+    default void event(String message) { }
 }

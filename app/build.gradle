@@ -1,4 +1,29 @@
 plugins { id 'com.android.application' }
+// Reproducible downstream fix applied to the pinned upstream checkout on all hosts.
+def tcpSource = file('../native/src/hev-socks5-session-tcp.c')
+def tcpOriginal = tcpSource.getText('UTF-8')
+if (!tcpOriginal.contains('GameShield: a completed stream')) {
+    def closePattern = '        tcp_err (self->pcb, NULL);\n        tcp_abort (self->pcb);'
+    def normalized = tcpOriginal.replace('\r\n', '\n')
+    if (!normalized.contains(closePattern)) throw new GradleException('Pinned native TCP close patch no longer matches')
+    tcpSource.setText(normalized.replace(closePattern,
+        '        tcp_err (self->pcb, NULL);\n' + file('../native-patches/graceful-close.txt').getText('UTF-8')), 'UTF-8')
+}
+def tcpHeader = file('../native/src/hev-socks5-session-tcp.h')
+def headerText = tcpHeader.getText('UTF-8').replace('\r\n', '\n')
+if (!headerText.contains('int clean_eof;')) {
+    if (!headerText.contains('    int pcb_eof;')) throw new GradleException('Native TCP header patch mismatch')
+    tcpHeader.setText(headerText.replace('    int pcb_eof;', '    int pcb_eof;\n    int remote_eof;\n    int clean_eof;'), 'UTF-8')
+}
+def spliceText = tcpSource.getText('UTF-8').replace('\r\n', '\n')
+if (!spliceText.contains('self->remote_eof = 1;')) {
+    def readAnchor = 'ssize_t s = readv (HEV_SOCKS5 (self)->fd, iov, iovc);'
+    def endAnchor = '\n}\n\nstatic HevTask *\nhev_socks5_session_tcp_get_task'
+    if (!spliceText.contains(readAnchor) || !spliceText.contains(endAnchor)) throw new GradleException('Native TCP splice patch mismatch')
+    spliceText = spliceText.replace(readAnchor, readAnchor + '\n        if (s == 0) self->remote_eof = 1;')
+    spliceText = spliceText.replace(endAnchor, '\n    self->clean_eof = self->pcb && self->pcb_eof && self->remote_eof && !self->queue &&\n        hev_ring_buffer_get_use_size (self->buffer) == 0;' + endAnchor)
+    tcpSource.setText(spliceText, 'UTF-8')
+}
 // Git on Windows may check out POSIX header symlinks as one-line text files.
 // Materialize only those headers, within the native checkout, before NDK config.
 if (System.getProperty('os.name').toLowerCase().contains('windows')) {
@@ -21,8 +46,8 @@ android {
         applicationId 'it.gameshield'
         minSdk 29
         targetSdk 35
-        versionCode 2
-        versionName '0.2.0'
+        versionCode 3
+        versionName '0.3.0'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         externalNativeBuild { ndkBuild { arguments 'NDK_APPLICATION_MK:=' + file('../native/Application.mk').absolutePath; targets 'hev-socks5-tunnel' } }
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
