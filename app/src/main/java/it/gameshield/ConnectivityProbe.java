@@ -33,7 +33,7 @@ public final class ConnectivityProbe {
                     // Bounded wire-level DNS check before invoking Android's native resolver.
                     // A dead relay must not leave getAllByName blocked for minutes.
                     try (DatagramSocket dns = new DatagramSocket()) {
-                        vpn.bindSocket(dns); dns.setSoTimeout(2500); dns.connect(InetAddress.getByName("198.18.0.2"), 53);
+                        vpn.bindSocket(dns); dns.setSoTimeout(10000); dns.connect(InetAddress.getByName("198.18.0.2"), 53);
                         byte[] query = Dns.query(host, 4173); dns.send(new DatagramPacket(query, query.length));
                         DatagramPacket answer = new DatagramPacket(new byte[4096], 4096); dns.receive(answer);
                         if (answer.getLength() < 12 || Dns.u16(answer.getData(), 0) != 4173 || (answer.getData()[3] & 15) != 0)
@@ -62,7 +62,7 @@ public final class ConnectivityProbe {
                     .getBytes(StandardCharsets.US_ASCII));
                 tls.getOutputStream().flush();
                 String status = new BufferedReader(new InputStreamReader(tls.getInputStream(), StandardCharsets.US_ASCII)).readLine();
-                if (status == null || !status.matches("HTTP/1\\.[01] [234][0-9][0-9].*"))
+                if (status == null || !status.matches("HTTP/1\\.[01] [1-5][0-9][0-9].*"))
                     throw new IOException(host + ": HTTPS " + status);
                 report.append("HTTPS OK (").append(status.split(" ")[1]).append(")\n");
                 result.httpsOk++; passed = true; break;

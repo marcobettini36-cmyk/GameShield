@@ -113,6 +113,25 @@ public class LocalProxyTest {
         udpEcho(12345);
     }
     @Test public void quicPort443IsForwardedInsteadOfDropped() throws Exception { udpEcho(443); }
+    @Test public void udpAssociationForwardsMoreThanEightDestinations() throws Exception {
+        Network n = new Network();
+        try(DatagramSocket echo=new DatagramSocket(); LocalProxy p=new LocalProxy(n,"user","secret"); Socket c=client(p); DatagramSocket udp=new DatagramSocket()) {
+            n.echoPort=echo.getLocalPort(); echo.setSoTimeout(5000); udp.setSoTimeout(3000);
+            Thread peer=new Thread(() -> {
+                try { for(int i=0;i<16;i++) { DatagramPacket packet=new DatagramPacket(new byte[10],10); echo.receive(packet); echo.send(new DatagramPacket(packet.getData(),packet.getLength(),packet.getSocketAddress())); } }
+                catch(IOException ignored) { }
+            }); peer.start();
+            assertTrue(auth(c,"secret")); int port=request(c,3,null,0);
+            for(int i=0;i<16;i++) {
+                ByteArrayOutputStream bytes=new ByteArrayOutputStream(); DataOutputStream out=new DataOutputStream(bytes);
+                out.write(new byte[]{0,0,0,1,(byte)203,0,113,10}); out.writeShort(20000+i); out.writeByte(i);
+                byte[] data=bytes.toByteArray(); udp.send(new DatagramPacket(data,data.length,InetAddress.getLoopbackAddress(),port));
+                DatagramPacket response=new DatagramPacket(new byte[100],100); udp.receive(response);
+                assertEquals(i,response.getData()[10]);
+            }
+            peer.join(5000); assertFalse(peer.isAlive());
+        }
+    }
     private void udpEcho(int targetPort) throws Exception {
         Network n = new Network();
         try (DatagramSocket echo = new DatagramSocket(); LocalProxy p = new LocalProxy(n, "user", "secret"); Socket c = client(p); DatagramSocket udp = new DatagramSocket()) {

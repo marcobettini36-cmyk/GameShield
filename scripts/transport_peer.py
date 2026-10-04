@@ -1,8 +1,11 @@
 """Controlled physical TCP peer for emulator FIN/half-close/concurrency regressions."""
-import socketserver
+import socketserver, threading
+completed_uploads = 0
+upload_lock = threading.Lock()
 
 class Peer(socketserver.StreamRequestHandler):
     def handle(self):
+        global completed_uploads
         self.request.settimeout(30)
         mode = self.rfile.readline()
         if mode == b'EOF\n':
@@ -18,6 +21,11 @@ class Peer(socketserver.StreamRequestHandler):
             data = self.rfile.read()
             if data != b'y' * 65536:
                 raise RuntimeError('Half-close upload truncated')
+            with upload_lock:
+                completed_uploads += 1
+        elif mode == b'COUNT\n':
+            with upload_lock:
+                self.wfile.write(str(completed_uploads).encode() + b'\n')
 
 class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True

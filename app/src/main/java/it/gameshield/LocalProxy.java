@@ -34,7 +34,7 @@ public final class LocalProxy implements AutoCloseable {
     private void handle(Socket client) {
         String phase = "SOCKS handshake";
         try (client) {
-            client.setSoTimeout(15000);
+            client.setSoTimeout(15000); client.setTcpNoDelay(true);
             DataInputStream in = new DataInputStream(client.getInputStream()); DataOutputStream out = new DataOutputStream(client.getOutputStream());
             if (in.readUnsignedByte() != 5) return;
             int count = in.readUnsignedByte(); boolean auth = false;
@@ -63,8 +63,8 @@ public final class LocalProxy implements AutoCloseable {
             InetAddress address = endpoint.domain == null ? endpoint.ip : network.resolve(endpoint.domain);
             network.event("TCP destination=" + address.getHostAddress() + ":" + port + " domain=" + endpoint.domain);
             if (address.isLoopbackAddress() || address.isAnyLocalAddress() || address.isMulticastAddress()) { reply(out, 2, 0); return; }
-            phase = "protected TCP connect (port " + port + ")";
-            Socket remote = network.socket(address, port); live.add(remote);
+            phase = "protected TCP connect " + address.getHostAddress() + ":" + port;
+            Socket remote = network.socket(address, port); remote.setTcpNoDelay(true); live.add(remote);
             try (remote) {
                 reply(out, 0, remote.getLocalPort());
                 // Download runs immediately: server-first TCP must not wait for a ClientHello.
@@ -89,7 +89,7 @@ public final class LocalProxy implements AutoCloseable {
                     remote.getOutputStream().write(first); remote.getOutputStream().flush();
                 }
                 client.setSoTimeout(0);
-                phase = "TCP upload";
+                phase = "TCP upload " + address.getHostAddress() + ":" + port;
                 try { copy(in, remote.getOutputStream()); remote.shutdownOutput();
                     try { downloaded.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 } finally { closeResource(remote); }

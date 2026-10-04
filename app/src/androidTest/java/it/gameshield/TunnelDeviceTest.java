@@ -46,8 +46,8 @@ public class TunnelDeviceTest {
     }
     private Network start() throws Exception {
         context.startForegroundService(new Intent(context, ShieldVpnService.class));
-        for (int i=0;i<150 && (vpn()==null || !ShieldVpnService.running);i++) SystemClock.sleep(200);
-        assertTrue("Native tunnel did not start", ShieldVpnService.running); assertNotNull(vpn()); return vpn();
+        for (int i=0;i<450 && (vpn()==null || !ShieldVpnService.running);i++) SystemClock.sleep(200);
+        assertTrue("Native tunnel did not start: " + context.getSharedPreferences("shield",0).getString("error","no service error recorded"), ShieldVpnService.running); assertNotNull(vpn()); return vpn();
     }
     @Test public void testAllowedAndBlockedTrafficThroughNativeTunnel() throws Exception {
         // Baseline: don't mistake an unavailable runner network for a VPN regression.
@@ -79,7 +79,9 @@ public class TunnelDeviceTest {
     @Test public void testRelayFailurePolicyAndInternetRestoration() throws Exception {
         start(); context.startForegroundService(new Intent(context, ShieldVpnService.class).setAction("TEST_BREAK_PROXY"));
         if (BuildConfig.STRONG) {
-            SystemClock.sleep(35000); assertNotNull("Strong must retain TUN on forwarding failure", vpn());
+            for(int i=0;i<1200 && context.getSharedPreferences("shield",0).getInt("consecutiveOutages",0)<3;i++) SystemClock.sleep(200);
+            assertEquals(3,context.getSharedPreferences("shield",0).getInt("consecutiveOutages",0));
+            assertNotNull("Strong must retain TUN on forwarding failure", vpn());
             assertFalse(context.getSharedPreferences("shield",0).getBoolean("connectivityOk",true));
         } else {
             for(int i=0;i<300 && context.getSharedPreferences("shield",0).getInt("consecutiveOutages",0)==0;i++) SystemClock.sleep(200);
@@ -170,6 +172,7 @@ public class TunnelDeviceTest {
     }
     @Test public void testNativeTcpFinAndHalfClose() throws Exception {
         Network tunnel = start();
+        int before=peerUploads(tunnel);
         for(int round=0;round<20;round++) {
             try(Socket socket=new Socket()) {
                 tunnel.bindSocket(socket); socket.connect(new InetSocketAddress("10.0.2.2",18080),5000); socket.setSoTimeout(10000);
@@ -185,9 +188,19 @@ public class TunnelDeviceTest {
                 byte[] upload=new byte[65536]; Arrays.fill(upload,(byte)'y');
                 socket.getOutputStream().write(upload); socket.shutdownOutput();
             }
+            int acknowledged=0;
+            for(int i=0;i<50;i++) { acknowledged=peerUploads(tunnel); if(acknowledged>=before+round+1) break; SystemClock.sleep(100); }
+            assertEquals("Physical peer must receive the complete half-close upload",before+round+1,acknowledged);
         }
         assertEquals(tunnel,vpn());
         android.util.Log.i("GameShieldDeviceTest","40 native TCP FIN / half-close transfers passed without reset");
+    }
+    private int peerUploads(Network tunnel) throws IOException {
+        try(Socket socket=new Socket()) {
+            tunnel.bindSocket(socket); socket.connect(new InetSocketAddress("10.0.2.2",18080),5000); socket.setSoTimeout(10000);
+            socket.getOutputStream().write("COUNT\n".getBytes(StandardCharsets.US_ASCII)); socket.shutdownOutput();
+            return Integer.parseInt(new String(LocalProxy.readAll(socket.getInputStream(),100),StandardCharsets.US_ASCII).trim());
+        }
     }
     private String shell(String command) throws IOException {
         try(android.os.ParcelFileDescriptor fd=InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command);

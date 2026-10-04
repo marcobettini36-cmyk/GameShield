@@ -18,13 +18,22 @@ for edition in ('normal', 'strong'):
         if len(matches) != 1: raise RuntimeError(f'Expected one {name}, got {matches}')
         adb('install', '-r', str(matches[0]), timeout=120)
     adb('shell', 'appops', 'set', package, 'ACTIVATE_VPN', 'allow')
+    if edition == 'normal':
+        adb('logcat', '-c')
+        preflight = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+            'it.gameshield.TunnelDeviceTest#testNativeTcpFinAndHalfClose',
+            package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=240)
+        (reports / 'startup-preflight.txt').write_text(preflight)
+        (reports / 'startup-preflight-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldVpn:I', 'GameShieldTransport:I', 'AndroidRuntime:E', 'ActivityManager:I', '*:S'))
+        print(preflight, flush=True)
+        if 'OK (1 test)' not in preflight: raise RuntimeError('Native TUN startup/FIN preflight failed')
     for mode in ('off', 'opportunistic'):
         adb('shell', 'settings', 'put', 'global', 'private_dns_mode', mode)
         adb('logcat', '-c')
         result = adb('shell', 'am', 'instrument', '-w', '-r',
             package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=900)
         (reports / f'{edition}-{mode}.txt').write_text(result)
-        (reports / f'{edition}-{mode}-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldDeviceTest:I', 'GameShieldTransport:I', 'GameShieldConnectivity:I', 'AndroidRuntime:E', '*:S'))
+        (reports / f'{edition}-{mode}-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldDeviceTest:I', 'GameShieldTransport:I', 'GameShieldConnectivity:I', 'GameShieldVpn:I', 'AndroidRuntime:E', '*:S'))
         for extension in ('png', 'xml'):
             subprocess.run(['adb', 'pull', '/sdcard/gameshield-store.' + extension,
                 str(reports / f'{edition}-{mode}-store.{extension}')], check=False, capture_output=True)

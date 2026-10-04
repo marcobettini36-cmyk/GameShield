@@ -34,6 +34,7 @@ public final class ShieldVpnService extends VpnService {
         else startForeground(1, note);
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        android.util.Log.i("GameShieldVpn", "Start action=" + (intent == null ? null : intent.getAction()) + " active=" + active);
         foreground("Avvio della protezione…");
         if (active) {
             if (BuildConfig.DEBUG && intent != null && "TEST_BREAK_PROXY".equals(intent.getAction())) {
@@ -48,7 +49,9 @@ public final class ShieldVpnService extends VpnService {
         active = true;
         worker.execute(() -> {
             try {
+                android.util.Log.i("GameShieldVpn", "Loading rules before TUN establishment");
                 store = new RuleStore(this); network = new ProtectedNetwork(this, store);
+                android.util.Log.i("GameShieldVpn", "Rules ready; establishing TUN");
                 synchronized (lifecycle) {
                 if (!active) return;
                 byte[] random = new byte[24]; new SecureRandom().nextBytes(random);
@@ -66,6 +69,7 @@ public final class ShieldVpnService extends VpnService {
                 try (FileOutputStream out = new FileOutputStream(file)) { out.write(config.getBytes(StandardCharsets.UTF_8)); }
                 if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
                 running = true;
+                android.util.Log.i("GameShieldVpn", "Native TUN started fd=" + tunnel.getFd());
                 }
                 getSharedPreferences("shield", 0).edit().putBoolean("wanted", true).putBoolean("connectivityOk", false)
                     .putString("connectivity", "Verifica DNS, TCP 443 e HTTPS in corso…").remove("error").putInt("rules", store.rules().size()).apply();
@@ -74,6 +78,7 @@ public final class ShieldVpnService extends VpnService {
                 worker.scheduleWithFixedDelay(this::connectivityTest, 2, 15, TimeUnit.SECONDS);
                 worker.scheduleWithFixedDelay(this::update, 1, 12 * 60 * 60, TimeUnit.SECONDS);
             } catch (Exception | LinkageError e) {
+                android.util.Log.e("GameShieldVpn", "VPN startup failed", e);
                 failure("Avvio fallito: " + e.getMessage());
             }
         });
@@ -121,6 +126,7 @@ public final class ShieldVpnService extends VpnService {
         } finally { checking.set(false); }
     }
     private void failure(String reason) {
+        android.util.Log.e("GameShieldVpn", reason);
         getSharedPreferences("shield", 0).edit().putBoolean("connectivityOk", false)
             .putString("error", reason + (BuildConfig.STRONG ? "; Strong mantiene la protezione" : "; VPN rimossa per ripristinare Internet. Filtro disattivato."))
             .putString("connectivity", reason).putBoolean("wanted", BuildConfig.STRONG).apply();
