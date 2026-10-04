@@ -23,7 +23,7 @@ public class TunnelDeviceTest {
     private Network physical;
     @Before public void setUp() throws Exception {
         context = InstrumentationRegistry.getInstrumentation().getTargetContext(); cm = context.getSystemService(ConnectivityManager.class);
-        context.stopService(new Intent(context, ShieldVpnService.class)); SystemClock.sleep(1000);
+        stopVpn(); SystemClock.sleep(1000);
         context.getSharedPreferences("shield",0).edit().remove("custom").commit();
         for (Network n : cm.getAllNetworks()) {
             NetworkCapabilities caps = cm.getNetworkCapabilities(n);
@@ -35,7 +35,7 @@ public class TunnelDeviceTest {
     }
     @After public void tearDown() throws Exception {
         context.getSharedPreferences("shield", 0).edit().putBoolean("wanted", false).commit();
-        context.stopService(new Intent(context, ShieldVpnService.class)); SystemClock.sleep(1000);
+        stopVpn(); SystemClock.sleep(1000);
     }
     private Network vpn() {
         for (Network n : cm.getAllNetworks()) {
@@ -43,6 +43,11 @@ public class TunnelDeviceTest {
             if (c != null && c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return n;
         }
         return null;
+    }
+    private void stopVpn() {
+        if (vpn()!=null || ShieldVpnService.running) context.startService(new Intent(context,ShieldVpnService.class).setAction("STOP"));
+        else context.stopService(new Intent(context,ShieldVpnService.class));
+        for(int i=0;i<100 && vpn()!=null;i++) SystemClock.sleep(200);
     }
     private Network start() throws Exception {
         context.startForegroundService(new Intent(context, ShieldVpnService.class));
@@ -160,7 +165,7 @@ public class TunnelDeviceTest {
             assertFalse("Google Play launch failed: " + store, store.contains("Error"));
             SystemClock.sleep(8000);
             shell("screencap -p /sdcard/gameshield-store.png");
-            shell("uiautomator dump /sdcard/gameshield-store.xml");
+
             assertEquals("Play Store must not remove VPN",tunnel,vpn());
             android.util.Log.i("GameShieldDeviceTest","Stable VPN: " + rounds + " concurrent rounds over 180 seconds; Google Play HTTPS endpoints OK");
             // Exercise the same stored custom list and RELOAD path as the user interface.
@@ -172,7 +177,7 @@ public class TunnelDeviceTest {
             https(tunnel,"google.it",null);
             assertEquals(tunnel,vpn());
         } finally { clients.shutdownNow(); context.getSharedPreferences("shield",0).edit().remove("custom").commit(); }
-        context.stopService(new Intent(context,ShieldVpnService.class));
+        stopVpn();
         for(int i=0;i<100 && vpn()!=null;i++) SystemClock.sleep(200);
         assertNull("Normal stop must restore ordinary routes",vpn());
         for(String host:ConnectivityProbe.HOSTS) https(physical,host,null);

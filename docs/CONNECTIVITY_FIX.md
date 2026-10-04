@@ -1,5 +1,7 @@
 # Connectivity regression — 0.2.0
 
+Historical report for 0.2.0. Current forwarding changes, sustained-outage policy and verification are documented in [FORWARDING_03.md](FORWARDING_03.md). The immediate single-failure teardown described below was replaced in 0.3.0.
+
 ## Confirmed defects in 0.1.0
 
 Android integration reproduced successful physical-network HTTPS followed by reset TCP/HTTPS through the TUN. Relay diagnostics isolated `vpn.protect(socket)` returning false for every new unconnected TCP `Socket`. Android `Socket.getFileDescriptor$()` does not force creation of a native fd: the relay threw `Impossibile proteggere socket` and closed each connection before forwarding. DatagramSocket was already bound, so DNS could still work. This is the reproduced primary cause of total TCP browsing failure. The fix binds an ephemeral local port first, then protects and binds the fd to the physical network, all before connecting. The Samsung S23 Ultra was not directly attached; the same failure was reproduced on Android API 30.

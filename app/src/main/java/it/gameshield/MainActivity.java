@@ -40,7 +40,7 @@ public final class MainActivity extends Activity {
         start = button(card, "Attiva protezione", this::startProtection);
         stop = button(card, "Disattiva protezione", () -> {
             if (new StrongPolicy(this).locked()) { toast("Serve il rilascio del custode"); return; }
-            prefs.edit().putBoolean("wanted", false).apply(); stopService(new Intent(this, ShieldVpnService.class)); renderStatus();
+            prefs.edit().putBoolean("wanted", false).apply(); startService(new Intent(this, ShieldVpnService.class).setAction("STOP")); renderStatus();
         });
         button(card, "Aggiorna blacklist", () -> {
             if (!ShieldVpnService.running) { toast("Attiva prima la VPN"); return; }

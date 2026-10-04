@@ -19,6 +19,9 @@ public final class ShieldVpnService extends VpnService {
     private final ExecutorService probes = Executors.newSingleThreadExecutor();
     private volatile boolean active;
     private volatile Network lastUnderlying;
+    private boolean ipv6Enabled;
+    private long familyCheckedAt;
+    private volatile long transportGeneration;
     private int consecutiveOutages;
     private final java.util.concurrent.atomic.AtomicBoolean checking = new java.util.concurrent.atomic.AtomicBoolean();
     private final Object lifecycle = new Object();
@@ -35,6 +38,10 @@ public final class ShieldVpnService extends VpnService {
     }
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         android.util.Log.i("GameShieldVpn", "Start action=" + (intent == null ? null : intent.getAction()) + " active=" + active);
+        if (intent != null && "STOP".equals(intent.getAction())) {
+            deactivate();
+            getSharedPreferences("shield",0).edit().putBoolean("wanted",false).apply(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY;
+        }
         foreground("Avvio della protezione…");
         if (active) {
             if (BuildConfig.DEBUG && intent != null && "TEST_BREAK_PROXY".equals(intent.getAction())) {
@@ -52,27 +59,13 @@ public final class ShieldVpnService extends VpnService {
                 android.util.Log.i("GameShieldVpn", "Loading rules before TUN establishment");
                 store = new RuleStore(this); network = new ProtectedNetwork(this, store);
                 android.util.Log.i("GameShieldVpn", "Rules ready; establishing TUN");
-                synchronized (lifecycle) {
+                boolean ipv6 = network.ipv6Available();
+                synchronized (lifecycle) { if (!active) return; establishTransport(ipv6); }
+                synchronized(lifecycle) {
                 if (!active) return;
-                byte[] random = new byte[24]; new SecureRandom().nextBytes(random);
-                String password = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
-                proxy = new LocalProxy(network, "gameshield", password);
-                Builder builder = new Builder().setSession("GameShield").setMtu(1500)
-                    .addAddress("198.18.0.1", 32).addAddress("fd42:4753::1", 128)
-                    .addDnsServer("198.18.0.2").addRoute("0.0.0.0", 0).addRoute("::", 0).setBlocking(false);
-                Network physical = network.underlying();
-                lastUnderlying = physical;
-                if (physical != null) builder.setUnderlyingNetworks(new Network[]{physical});
-                tunnel = builder.establish(); if (tunnel == null) throw new IOException("Consenso VPN mancante");
-                String config = "tunnel:\n  mtu: 1500\n  ipv4: 198.18.0.1\n  ipv6: 'fd42:4753::1'\nsocks5:\n  address: 127.0.0.1\n  port: " + proxy.port() + "\n  udp: 'udp'\n  username: 'gameshield'\n  password: '" + password + "'\nmisc:\n  max-session-count: 128\n  tcp-read-write-timeout: 1800000\n  log-level: error\n";
-                File file = new File(getFilesDir(), "tunnel.yml");
-                try (FileOutputStream out = new FileOutputStream(file)) { out.write(config.getBytes(StandardCharsets.UTF_8)); }
-                if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
-                running = true;
-                android.util.Log.i("GameShieldVpn", "Native TUN started fd=" + tunnel.getFd());
-                }
                 getSharedPreferences("shield", 0).edit().putBoolean("wanted", true).putBoolean("connectivityOk", false)
                     .putString("connectivity", "Verifica DNS, TCP 443 e HTTPS in corso…").remove("error").putInt("rules", store.rules().size()).apply();
+                }
                 foreground("Verifica connettività nel tunnel…");
                 worker.scheduleWithFixedDelay(this::health, 2, 2, TimeUnit.SECONDS);
                 worker.scheduleWithFixedDelay(this::connectivityTest, 2, 15, TimeUnit.SECONDS);
@@ -84,8 +77,38 @@ public final class ShieldVpnService extends VpnService {
         });
         return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
     }
+    private void establishTransport(boolean ipv6) throws IOException {
+        byte[] random = new byte[24]; new SecureRandom().nextBytes(random);
+        String password = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+        proxy = new LocalProxy(network, "gameshield", password);
+        Builder builder = new Builder().setSession("GameShield").setMtu(1500)
+            .addAddress("198.18.0.1", 32).addDnsServer("198.18.0.2")
+            .addRoute("0.0.0.0", 0).setBlocking(false);
+        if (ipv6) builder.addAddress("fd42:4753::1",128).addRoute("::",0);
+        Network physical = network.underlying();
+        lastUnderlying = physical;
+        if (physical != null) builder.setUnderlyingNetworks(new Network[]{physical});
+        tunnel = builder.establish(); if (tunnel == null) throw new IOException("Consenso VPN mancante");
+        String config = "tunnel:\n  mtu: 1500\n  ipv4: 198.18.0.1\n" + (ipv6 ? "  ipv6: 'fd42:4753::1'\n" : "") + "socks5:\n  address: 127.0.0.1\n  port: " + proxy.port() + "\n  udp: 'udp'\n  username: 'gameshield'\n  password: '" + password + "'\nmisc:\n  max-session-count: 128\n  tcp-read-write-timeout: 1800000\n  log-level: error\n";
+        File file = new File(getFilesDir(), "tunnel.yml");
+        try (FileOutputStream out = new FileOutputStream(file)) { out.write(config.getBytes(StandardCharsets.UTF_8)); }
+        if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
+        ipv6Enabled = ipv6; familyCheckedAt = SystemClock.elapsedRealtime(); running = true;
+        transportGeneration++;
+        getSharedPreferences("shield",0).edit().putBoolean("connectivityOk",false).apply();
+        android.util.Log.i("GameShieldVpn", "Native TUN ready; physical IPv6=" + ipv6);
+    }
+    private void deactivate() {
+        active = false; running = false;
+        synchronized (lifecycle) {
+            if (tunnel != null) try { tunnel.close(); } catch(IOException ignored) { }
+            tunnel = null;
+            if (proxy != null) proxy.close();
+        }
+    }
     private void connectivityTest() {
         if (!active || !running || !checking.compareAndSet(false, true)) return;
+        long generation = transportGeneration;
         Network initialPhysical = network.underlying();
         Future<ConnectivityProbe.Result> check = probes.submit(() -> {
             ConnectivityManager cm = getSystemService(ConnectivityManager.class);
@@ -98,7 +121,7 @@ public final class ShieldVpnService extends VpnService {
         });
         try {
             ConnectivityProbe.Result result = check.get(120, TimeUnit.SECONDS);
-            if (!active) return;
+            if (!active || generation != transportGeneration) return;
             String report = result.toString();
             boolean physicalWorks = false;
             if (!result.usable() && initialPhysical != null) {
@@ -131,19 +154,29 @@ public final class ShieldVpnService extends VpnService {
             .putString("error", reason + (BuildConfig.STRONG ? "; Strong mantiene la protezione" : "; VPN rimossa per ripristinare Internet. Filtro disattivato."))
             .putString("connectivity", reason).putBoolean("wanted", BuildConfig.STRONG).apply();
         if (BuildConfig.STRONG) { foreground("Errore connettività • serve verifica del custode"); return; }
-        // Close TUN immediately, before joining native threads: restore Android's physical routes.
-        active = false; running = false;
-        synchronized (lifecycle) {
-            if (tunnel != null) try { tunnel.close(); } catch (IOException ignored) { }
-            tunnel = null;
-        }
+        deactivate();
         stopSelf();
     }
     private void health() {
         if (!active) return;
         Network physical = network.underlying();
-        if (!Objects.equals(physical, lastUnderlying)) {
+        boolean changed = !Objects.equals(physical, lastUnderlying);
+        if (changed) {
             setUnderlyingNetworks(physical == null ? null : new Network[]{physical}); lastUnderlying = physical;
+        }
+        if (changed || SystemClock.elapsedRealtime() - familyCheckedAt > 60000) {
+            boolean ipv6 = network.ipv6Available(); familyCheckedAt = SystemClock.elapsedRealtime();
+            if (ipv6 != ipv6Enabled) {
+                synchronized(lifecycle) {
+                    if (!active) return;
+                    running = false;
+                    try {
+                        if (tunnel != null) tunnel.close(); tunnel = null;
+                        TProxyService.TProxyStopService(); proxy.close();
+                        establishTransport(ipv6);
+                    } catch(Exception | LinkageError error) { failure("Cambio famiglia rete fallito: " + error.getMessage()); return; }
+                }
+            }
         }
         if (!TProxyService.TProxyIsRunning()) {
             running = false;
@@ -156,7 +189,7 @@ public final class ShieldVpnService extends VpnService {
         try { store.install(network.downloadFeed()); getSharedPreferences("shield", 0).edit().remove("updateError").apply(); }
         catch (Exception e) { getSharedPreferences("shield", 0).edit().putString("updateError", "Aggiornamento non riuscito; resta valida la lista precedente: " + e.getMessage()).apply(); }
     }
-    @Override public void onRevoke() { getSharedPreferences("shield", 0).edit().putBoolean("wanted", false).apply(); stopSelf(); }
+    @Override public void onRevoke() { getSharedPreferences("shield", 0).edit().putBoolean("wanted", false).apply(); deactivate(); stopSelf(); }
     @Override public void onDestroy() {
         active = false; running = false;
         if (worker != null) worker.shutdownNow();

@@ -49,6 +49,6 @@ public final class StrongPolicy {
         }
         context.getSharedPreferences("shield", 0).edit().putBoolean("wanted", false).commit();
         new Guardian(context).clearAfterRelease();
-        context.stopService(new Intent(context, ShieldVpnService.class));
+        context.startService(new Intent(context, ShieldVpnService.class).setAction("STOP"));
     }
 }

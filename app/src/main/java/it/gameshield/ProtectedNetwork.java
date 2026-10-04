@@ -46,6 +46,9 @@ public final class ProtectedNetwork implements ProxyNetwork {
         return selected;
     }
     public Socket socket(InetAddress ip, int port) throws IOException {
+        return socket(ip, port, 10000);
+    }
+    private Socket socket(InetAddress ip, int port, int timeout) throws IOException {
         Socket socket = new Socket();
         try {
             // Android new Socket() has no kernel fd yet; protect(Socket) would return false.
@@ -56,8 +59,31 @@ public final class ProtectedNetwork implements ProxyNetwork {
             if (!protectedSocket) throw new IOException("Impossibile proteggere socket");
             Network physical = underlying(); if (physical != null) physical.bindSocket(socket);
             event("TCP bind physical=" + physical + " destination=" + ip.getHostAddress() + ":" + port);
-            socket.connect(new InetSocketAddress(ip, port), 10000); socket.setSoTimeout(60000); return socket;
+            socket.connect(new InetSocketAddress(ip, port), timeout); socket.setSoTimeout(60000); return socket;
         } catch (IOException e) { socket.close(); throw e; }
+    }
+    public boolean ipv6Available() {
+        Network physical = underlying();
+        LinkProperties link = physical == null ? null : connectivity.getLinkProperties(physical);
+        if (link == null) return false;
+        boolean ipv4 = false, global6 = false, default6 = false;
+        for (android.net.LinkAddress address : link.getLinkAddresses()) {
+            InetAddress ip = address.getAddress();
+            if (ip instanceof Inet4Address) ipv4 = true;
+            if (ip instanceof Inet6Address && !ip.isLinkLocalAddress() && !ip.isSiteLocalAddress()
+                    && !ip.isLoopbackAddress()) global6 = true;
+        }
+        for (android.net.RouteInfo route : link.getRoutes())
+            if (route.isDefaultRoute() && route.getDestination().getAddress() instanceof Inet6Address) default6 = true;
+        if (!global6 || !default6) { event("IPv6 unavailable: physical link has no usable global IPv6/default route"); return false; }
+        // A synthetic TUN SYN-ACK must not fool Happy Eyeballs when physical IPv6 is broken.
+        for (String address : new String[]{"2606:4700:4700::1111", "2001:4860:4860::8888"}) {
+            try (Socket socket = socket(InetAddress.getByName(address), 443, 2000)) { event("IPv6 physical TCP verified"); return true; }
+            catch (IOException error) { diagnostic("IPv6 physical capability check", error); }
+        }
+        // Do not remove the only family on an IPv6-only link merely because probe providers are unreachable.
+        event("IPv6 probe inconclusive; physical IPv4=" + ipv4);
+        return !ipv4;
     }
     public DatagramSocket datagram() throws IOException {
         DatagramSocket socket = new DatagramSocket();
