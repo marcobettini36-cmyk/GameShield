@@ -53,11 +53,22 @@ public class TunnelDeviceTest {
         context.startForegroundService(new Intent(context, ShieldVpnService.class));
         for (int i=0;i<450 && (vpn()==null || !ShieldVpnService.running);i++) SystemClock.sleep(200);
         assertTrue("Native tunnel did not start: " + context.getSharedPreferences("shield",0).getString("error","no service error recorded"), ShieldVpnService.running); assertNotNull(vpn());
-        // NetworkAgent visibility precedes netd's per-UID access rules on busy Android 15 boot.
+        // NetworkAgent visibility and bind permission precede route installation on busy boot.
+        // Prove a packet reached the synthetic DNS/filter before testing steady TCP flows;
+        // otherwise an early socket can start physically and be reset by netd's VPN transition.
         IOException registration = null;
-        for(int i=0;i<40;i++) {
-            try(Socket socket=new Socket()) { vpn().bindSocket(socket); return vpn(); }
-            catch(IOException pending) { registration=pending; SystemClock.sleep(250); }
+        for(int i=0;i<3;i++) {
+            try {
+                Network tunnel=vpn();
+                byte[] answer=dns(tunnel,"playzilla.com");
+                if ((answer[3]&15)!=3) throw new IOException("Synthetic DNS did not enforce the filter");
+                android.util.Log.i("GameShieldDeviceTest","Native packet path ready after synthetic DNS BLOCK reply");
+                return tunnel;
+            } catch(IOException pending) {
+                registration=pending;
+                android.util.Log.w("GameShieldDeviceTest","VPN packet path registration pending",pending);
+                SystemClock.sleep(250);
+            }
         }
         throw new IOException("VPN network UID rules not ready: " + cm.getNetworkCapabilities(vpn()),registration);
     }
