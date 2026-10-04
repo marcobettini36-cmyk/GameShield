@@ -30,6 +30,10 @@ public class TunnelDeviceTest {
             if (caps != null && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
                     && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) physical = n;
         }
+        Network current=cm.getActiveNetwork();
+        NetworkCapabilities currentCaps=cm.getNetworkCapabilities(current);
+        if(currentCaps!=null && !currentCaps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) physical=current;
+        android.util.Log.i("GameShieldDeviceTest","Physical baseline="+physical+" active="+current);
         assertNotNull("Underlying network required", physical);
         assertNull("Grant ACTIVATE_VPN app-op on dedicated test emulator first", VpnService.prepare(context));
     }
@@ -114,7 +118,7 @@ public class TunnelDeviceTest {
             assertNull("Normal must release TUN after failed forwarding",vpn());
             assertFalse(ShieldVpnService.running);
             assertFalse(context.getSharedPreferences("shield",0).getBoolean("wanted",true));
-            for(String host:ConnectivityProbe.HOSTS) https(physical,host,null);
+            ordinaryBrowsing();
         }
     }
     @Test public void testChromiumWebViewBrowsingThroughVpn() throws Exception {
@@ -192,7 +196,7 @@ public class TunnelDeviceTest {
         stopVpn();
         for(int i=0;i<100 && vpn()!=null;i++) SystemClock.sleep(200);
         assertNull("Normal stop must restore ordinary routes",vpn());
-        for(String host:ConnectivityProbe.HOSTS) https(physical,host,null);
+        ordinaryBrowsing();
     }
     @Test public void testNativeTcpFinAndHalfClose() throws Exception {
         Network tunnel = start();
@@ -280,11 +284,12 @@ public class TunnelDeviceTest {
         }
     }
     private void https(Network network, String host, InetAddress[] known) throws IOException {
-        InetAddress[] addresses = known == null ? network.getAllByName(host) : known;
+        InetAddress[] addresses = known == null ? (network==null ? InetAddress.getAllByName(host) : network.getAllByName(host)) : known;
         IOException failure = null;
         for (InetAddress address : addresses) {
             try (Socket socket = new Socket()) {
-                network.bindSocket(socket); socket.connect(new InetSocketAddress(address,443),10000); socket.setSoTimeout(10000);
+                if(network!=null) network.bindSocket(socket);
+                socket.connect(new InetSocketAddress(address,443),10000); socket.setSoTimeout(10000);
                 try (SSLSocket tls = (SSLSocket) ((SSLSocketFactory)SSLSocketFactory.getDefault()).createSocket(socket,host,443,true)) {
                     SSLParameters parameters = tls.getSSLParameters(); parameters.setEndpointIdentificationAlgorithm("HTTPS"); tls.setSSLParameters(parameters);
                     tls.startHandshake(); tls.getOutputStream().write(("HEAD / HTTP/1.1\r\nHost: "+host+"\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
@@ -295,5 +300,23 @@ public class TunnelDeviceTest {
             } catch(IOException e) { failure=e; }
         }
         throw new IOException(host+" HTTPS failed",failure);
+    }
+    private void ordinaryBrowsing() throws Exception {
+        assertNull("VPN must be absent before ordinary Android traffic",vpn());
+        for(String host:ConnectivityProbe.HOSTS) {
+            // Test ordinary unbound app sockets and the default resolver, not a stale
+            // non-default cellular Network saved before the VPN transition.
+            IOException pending=null;
+            for(int attempt=0;attempt<3;attempt++) {
+                try { https(null,host,null); pending=null; break; }
+                catch(IOException error) {
+                    pending=error;
+                    android.util.Log.w("GameShieldDeviceTest","Default DNS/routes restoring, active="+cm.getActiveNetwork()+" host="+host,error);
+                    SystemClock.sleep(5500);
+                }
+            }
+            if(pending!=null) throw pending;
+        }
+        android.util.Log.i("GameShieldDeviceTest","VPN off: ordinary default DNS/TCP/HTTPS restored; active="+cm.getActiveNetwork());
     }
 }

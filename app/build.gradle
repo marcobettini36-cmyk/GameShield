@@ -41,6 +41,13 @@ if (!timerText.contains(timerCondition)) {
     // FIN retransmission and TIME_WAIT belong to lwIP after a relay session finishes.
     tunnelSource.setText(timerText.replace(timerAnchor, timerCondition), 'UTF-8')
 }
+def wakeText = tunnelSource.getText('UTF-8').replace('\r\n', '\n')
+if (!wakeText.contains('int tcp_was_idle')) {
+    def inputAnchor = '        hev_task_mutex_lock (&mutex);\n        if (netif->input (buf, netif) != ERR_OK)\n            pbuf_free (buf);\n        hev_task_mutex_unlock (&mutex);'
+    if (!wakeText.contains(inputAnchor)) throw new GradleException('Native TCP SYN timer wake patch mismatch')
+    tunnelSource.setText(wakeText.replace(inputAnchor,
+        '        hev_task_mutex_lock (&mutex);\n        int tcp_was_idle = !tcp_active_pcbs && !tcp_tw_pcbs;\n        if (netif->input (buf, netif) != ERR_OK)\n            pbuf_free (buf);\n        if (tcp_was_idle && (tcp_active_pcbs || tcp_tw_pcbs))\n            hev_task_wakeup (task_lwip_timer);\n        hev_task_mutex_unlock (&mutex);'), 'UTF-8')
+}
 // Materialize only those headers, within the native checkout, before NDK config.
 if (System.getProperty('os.name').toLowerCase().contains('windows')) {
     def nativeRoot = file('../native').canonicalFile.toPath()
