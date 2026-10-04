@@ -129,6 +129,7 @@ public final class ShieldVpnService extends VpnService {
                 try { physicalWorks = baseline.get(120, TimeUnit.SECONDS).usable(); }
                 catch (Exception error) { baseline.cancel(true); }
             }
+            if (!active || generation != transportGeneration) return;
             // A host outage, offline phone or network handover is not evidence of a broken tunnel.
             boolean confirmedOutage = !result.usable() && physicalWorks
                 && Objects.equals(initialPhysical, network.underlying());
@@ -189,7 +190,7 @@ public final class ShieldVpnService extends VpnService {
         try { store.install(network.downloadFeed()); getSharedPreferences("shield", 0).edit().remove("updateError").apply(); }
         catch (Exception e) { getSharedPreferences("shield", 0).edit().putString("updateError", "Aggiornamento non riuscito; resta valida la lista precedente: " + e.getMessage()).apply(); }
     }
-    @Override public void onRevoke() { getSharedPreferences("shield", 0).edit().putBoolean("wanted", false).apply(); deactivate(); stopSelf(); }
+    @Override public void onRevoke() { deactivate(); getSharedPreferences("shield", 0).edit().putBoolean("wanted", false).apply(); stopSelf(); }
     @Override public void onDestroy() {
         active = false; running = false;
         if (worker != null) worker.shutdownNow();
