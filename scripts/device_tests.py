@@ -21,7 +21,7 @@ for edition in ('normal', 'strong'):
         result = adb('shell', 'am', 'instrument', '-w', '-r',
             package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=420)
         (reports / f'{edition}-{mode}.txt').write_text(result)
-        (reports / f'{edition}-{mode}-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldDeviceTest:I', 'AndroidRuntime:E', '*:S'))
+        (reports / f'{edition}-{mode}-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldDeviceTest:I', 'GameShieldTransport:W', 'AndroidRuntime:E', '*:S'))
         print(f'{edition}/{mode}:\n{result}', flush=True)
         if 'OK (3 tests)' not in result or 'FAILURES' in result: raise RuntimeError('Native tunnel instrumentation failed')
     adb('shell', 'am', 'force-stop', package)

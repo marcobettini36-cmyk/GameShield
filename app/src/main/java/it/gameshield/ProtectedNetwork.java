@@ -95,6 +95,9 @@ public final class ProtectedNetwork implements ProxyNetwork {
         boolean deny = domain != null && store.rules().blocks(domain);
         if (deny) blocked.incrementAndGet(); return deny;
     }
+    @Override public void diagnostic(String phase, IOException error) {
+        if (BuildConfig.DEBUG) android.util.Log.w("GameShieldTransport", phase + ": " + error.getMessage(), error);
+    }
     public byte[] downloadFeed() throws IOException {
         String host = RuleStore.FEED_HOST;
         try (Socket raw = socket(resolve(host), 443);

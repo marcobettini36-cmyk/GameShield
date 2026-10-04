@@ -8,4 +8,5 @@ public interface ProxyNetwork {
     byte[] dns(byte[] query) throws IOException;
     InetAddress resolve(String domain) throws IOException;
     boolean denied(String domain, int port, boolean udp);
+    default void diagnostic(String phase, IOException error) { }
 }

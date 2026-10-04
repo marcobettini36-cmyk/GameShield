@@ -32,6 +32,7 @@ public final class LocalProxy implements AutoCloseable {
         try { workers.execute(task); } catch (RejectedExecutionException e) { closeResource(resource); live.remove(resource); }
     }
     private void handle(Socket client) {
+        String phase = "SOCKS handshake";
         try (client) {
             client.setSoTimeout(15000);
             DataInputStream in = new DataInputStream(client.getInputStream()); DataOutputStream out = new DataOutputStream(client.getOutputStream());
@@ -48,6 +49,9 @@ public final class LocalProxy implements AutoCloseable {
             Endpoint endpoint = readEndpoint(in); int port = in.readUnsignedShort();
             if (command == 3) { udp(client, in, out); return; }
             if (command != 1 || port == 0 || network.denied(endpoint.domain, port, false)) { reply(out, 2, 0); return; }
+            // This synthetic DNS address has no DoT server. Reject its probe immediately so
+            // Android Private DNS Automatic can fall back; real remote DoT remains permitted.
+            if (port == 853 && endpoint.ip != null && endpoint.ip.getHostAddress().equals("198.18.0.2")) { reply(out, 5, 0); return; }
             if (port == 53) {
                 reply(out, 0, 0); client.setSoTimeout(60000);
                 while (running) {
@@ -58,24 +62,27 @@ public final class LocalProxy implements AutoCloseable {
             }
             InetAddress address = endpoint.domain == null ? endpoint.ip : network.resolve(endpoint.domain);
             if (address.isLoopbackAddress() || address.isAnyLocalAddress() || address.isMulticastAddress()) { reply(out, 2, 0); return; }
+            phase = "protected TCP connect (port " + port + ")";
             Socket remote = network.socket(address, port); live.add(remote);
             try (remote) {
                 reply(out, 0, remote.getLocalPort());
                 // Inspect the first TLS record on HTTPS and HTTP Host on port 80 before forwarding.
                 if (port == 443 || port == 853 || port == 80) {
+                    phase = "first flight (port " + port + ")";
                     client.setSoTimeout(10000); byte[] first = firstFlight(in, port);
                     String host = port == 80 ? httpHost(first) : TlsNames.sni(first);
                     if (network.denied(host, port, false)) return;
                     remote.getOutputStream().write(first); remote.getOutputStream().flush();
                 }
                 client.setSoTimeout(300000); remote.setSoTimeout(300000);
-                submit(() -> { try { copy(remote.getInputStream(), client.getOutputStream()); client.shutdownOutput(); } catch (IOException ignored) {} finally { closeResource(client); closeResource(remote); } }, remote);
+                phase = "TCP upload";
+                submit(() -> { try { copy(remote.getInputStream(), client.getOutputStream()); client.shutdownOutput(); } catch (IOException error) { network.diagnostic("TCP return", error); } finally { closeResource(client); closeResource(remote); } }, remote);
                 try { copy(in, remote.getOutputStream()); remote.shutdownOutput();
                     // Keep remote open until the peer finishes returning data after client half-close.
                     while (!client.isClosed() && running) { try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; } }
                 } finally { closeResource(remote); }
             } finally { live.remove(remote); }
-        } catch (IOException ignored) { }
+        } catch (IOException error) { network.diagnostic(phase, error); }
         finally { live.remove(client); }
     }
     private void udp(Socket control, DataInputStream controlIn, DataOutputStream controlOut) throws IOException {
