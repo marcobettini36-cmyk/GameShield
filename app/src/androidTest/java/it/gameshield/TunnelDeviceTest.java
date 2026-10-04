@@ -167,6 +167,7 @@ public class TunnelDeviceTest {
             shell("screencap -p /sdcard/gameshield-store.png");
 
             assertEquals("Play Store must not remove VPN",tunnel,vpn());
+            chrome(tunnel);
             android.util.Log.i("GameShieldDeviceTest","Stable VPN: " + rounds + " concurrent rounds over 180 seconds; Google Play HTTPS endpoints OK");
             // Exercise the same stored custom list and RELOAD path as the user interface.
             context.getSharedPreferences("shield",0).edit().putString("custom","example.com").commit();
@@ -219,6 +220,42 @@ public class TunnelDeviceTest {
             InputStream input=new android.os.ParcelFileDescriptor.AutoCloseInputStream(fd)) {
             return new String(LocalProxy.readAll(input,1000000),StandardCharsets.UTF_8);
         }
+    }
+    private void chrome(Network tunnel) throws Exception {
+        String launch=shell("am start -a android.intent.action.VIEW -d https://www.google.it/ -p com.android.chrome");
+        assertFalse("Chrome launch failed: " + launch,launch.contains("Error"));
+        android.app.UiAutomation automation=InstrumentationRegistry.getInstrumentation().getUiAutomation();
+        android.accessibilityservice.AccessibilityServiceInfo info=automation.getServiceInfo();
+        info.flags |= android.accessibilityservice.AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS;
+        automation.setServiceInfo(info);
+        String last=""; boolean page=false;
+        for(int attempt=0;attempt<120;attempt++) {
+            android.view.accessibility.AccessibilityNodeInfo root=automation.getRootInActiveWindow();
+            if(root!=null) {
+                StringBuilder texts=new StringBuilder(); collect(root,texts); last=texts.toString();
+                for(String text:new String[]{"Use without an account","Accept & continue","No thanks","Got it"}) {
+                    for(android.view.accessibility.AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(text)) {
+                        if(node.getText()==null || !text.equals(node.getText().toString())) continue;
+                        for(int parent=0;parent<4 && node!=null;parent++,node=node.getParent())
+                            if(node.isClickable()) { node.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK); break; }
+                    }
+                }
+                for(android.view.accessibility.AccessibilityNodeInfo bar:root.findAccessibilityNodeInfosByViewId("com.android.chrome:id/url_bar")) {
+                    if(bar.getText()!=null && bar.getText().toString().contains("google") && last.contains("Google")
+                            && !last.contains("ERR_") && !last.contains("This site can")) page=true;
+                }
+                if(page) break;
+            }
+            SystemClock.sleep(500);
+        }
+        shell("screencap -p /sdcard/gameshield-chrome.png");
+        android.util.Log.i("GameShieldDeviceTest","Chrome active VPN UI: " + last);
+        assertTrue("Chrome Google page not rendered: " + last,page);
+        assertEquals("Chrome must keep the same VPN",tunnel,vpn());
+    }
+    private void collect(android.view.accessibility.AccessibilityNodeInfo node,StringBuilder text) {
+        if(node.getText()!=null) text.append(node.getText()).append(' ');
+        for(int i=0;i<node.getChildCount();i++) { android.view.accessibility.AccessibilityNodeInfo child=node.getChild(i); if(child!=null) collect(child,text); }
     }
     private byte[] dns(Network network, String host) throws IOException {
         try (DatagramSocket socket = new DatagramSocket()) {

@@ -37,6 +37,8 @@ for edition in ('normal', 'strong'):
         for extension in ('png', 'xml'):
             subprocess.run(['adb', 'pull', '/sdcard/gameshield-store.' + extension,
                 str(reports / f'{edition}-{mode}-store.{extension}')], check=False, capture_output=True)
+        subprocess.run(['adb', 'pull', '/sdcard/gameshield-chrome.png',
+            str(reports / f'{edition}-{mode}-chrome.png')], check=False, capture_output=True)
         print(f'{edition}/{mode}:\n{result}', flush=True)
         if 'OK (5 tests)' not in result or 'FAILURES' in result: raise RuntimeError('Native tunnel instrumentation failed')
     adb('shell', 'am', 'force-stop', package)
