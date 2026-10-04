@@ -1,0 +1,11 @@
+    /* GameShield: drain orphan closing PCBs before the task allocator is freed.
+     * Graceful FIN hands lifetime to lwIP; lwip_init() does not clear these lists
+     * on the next engine start. Keeping them would dereference freed memory.
+     * All session tasks have already finished when gateway_fini() executes. */
+    while (tcp_active_pcbs)
+        tcp_abandon (tcp_active_pcbs, 0);
+    while (tcp_tw_pcbs)
+        tcp_abort (tcp_tw_pcbs);
+    while (tcp_bound_pcbs)
+        tcp_abandon (tcp_bound_pcbs, 0);
+

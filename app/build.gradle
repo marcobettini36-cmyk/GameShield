@@ -25,6 +25,14 @@ if (!spliceText.contains('self->remote_eof = 1;')) {
     tcpSource.setText(spliceText, 'UTF-8')
 }
 // Git on Windows may check out POSIX header symlinks as one-line text files.
+def tunnelSource = file('../native/src/hev-socks5-tunnel.c')
+def tunnelText = tunnelSource.getText('UTF-8').replace('\r\n', '\n')
+if (!tunnelText.contains('GameShield: drain orphan closing PCBs')) {
+    def cleanupAnchor = '    if (netif) {\n        netif_remove (netif);'
+    if (!tunnelText.contains(cleanupAnchor)) throw new GradleException('Native TCP shutdown cleanup patch mismatch')
+    tunnelSource.setText(tunnelText.replace(cleanupAnchor,
+        file('../native-patches/tcp-shutdown.txt').getText('UTF-8') + cleanupAnchor), 'UTF-8')
+}
 // Materialize only those headers, within the native checkout, before NDK config.
 if (System.getProperty('os.name').toLowerCase().contains('windows')) {
     def nativeRoot = file('../native').canonicalFile.toPath()
