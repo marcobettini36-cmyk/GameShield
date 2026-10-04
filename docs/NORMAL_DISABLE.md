@@ -27,4 +27,11 @@ Il flusso mantiene disattivazione trasparente e controllo dell’utente. Non è 
 
 11 nuovi test JVM Normal: 8 per countdown/codice/cancellazione/conferma/PIN/ricreazione, 3 per validazione/hash/salt/storage malformato. Tutte le regressioni esistenti sono mantenute.
 
-Due test Android Normal con vero servizio VPN e attese di 60 secondi: Internet durante attesa, pulsante MainActivity, codice errato/corretto, annullamento, conferma negativa/positiva, background e riapertura, ricreazione durante countdown e conferma finale, PIN errato/corretto, creazione/modifica/rimozione PIN, nessuna disattivazione accidentale. Eseguiti in CI dopo le cinque regressioni tunnel, con Private DNS Off e Automatico. Strong usa esclusivamente la suite tunnel precedente.
+Due test Android Normal con vero servizio VPN e attese di 60 secondi: Internet durante attesa, pulsante MainActivity, codice errato/corretto, annullamento, conferma negativa/positiva, background e riapertura, ricreazione durante countdown e conferma finale, PIN errato/corretto, creazione/modifica/rimozione PIN, nessuna disattivazione accidentale. Eseguiti in CI prima delle cinque regressioni tunnel, con Private DNS Off e Automatico. Strong usa esclusivamente la suite tunnel precedente.
+
+
+## Esito verificato
+
+[GitHub Actions 37197742386](https://github.com/marcobettini36-cmyk/GameShield/actions/runs/37197742386): tutti i cinque job riusciti, sorgente `954c12ad622c532032a5b35bb319de43b336f709`. 93 test JVM, 5 Python, 25 esecuzioni Android (quattro nuovi test UI Normal nelle due configurazioni DNS, 20 regressioni tunnel, un preflight). UI Normal Off: 2 test in 248,189 secondi; Automatico: 2 test in 338,531 secondi, con attese reali di 60 secondi. Nessun countdown accorciato nei test Android.
+
+APK Normal debug 0.3.1, versionCode 4, firma verificata; le tre librerie VPN native sono identiche byte per byte all’APK 0.3.0 precedente. Nessuna nuova classe PIN/schermata Normal nell’APK Strong. Samsung S23 Ultra non collegato: questi risultati sono su Android 15 emulato.
