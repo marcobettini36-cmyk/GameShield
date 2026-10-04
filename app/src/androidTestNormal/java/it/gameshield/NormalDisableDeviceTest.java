@@ -29,7 +29,12 @@ public class NormalDisableDeviceTest {
         SystemClock.sleep(2500);https();
     }
     @After public void after()throws Exception{if(screen!=null)ui(()->screen.finish());stop();c.getSharedPreferences("normal_disable_pin",0).edit().clear().commit();}
-    private void stop(){c.startService(new Intent(c,ShieldVpnService.class).setAction("STOP"));for(int i=0;i<100&&vpn()!=null;i++)SystemClock.sleep(100);}
+    private void stop(){
+        if(vpn()!=null || ShieldVpnService.running)c.startService(new Intent(c,ShieldVpnService.class).setAction("STOP"));
+        else c.stopService(new Intent(c,ShieldVpnService.class));
+        for(int i=0;i<100&&(vpn()!=null || ShieldVpnService.running);i++)SystemClock.sleep(100);
+        SystemClock.sleep(1000);
+    }
     private Network vpn(){for(Network n:cm.getAllNetworks()){NetworkCapabilities caps=cm.getNetworkCapabilities(n);if(caps!=null&&caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN))return n;}return null;}
     private void active(){assertTrue("Protection accidentally stopped",ShieldVpnService.running);assertNotNull(vpn());}
     private void https()throws Exception{Network n=vpn();assertNotNull(n);HttpsURLConnection h=(HttpsURLConnection)n.openConnection(new java.net.URL("https://www.google.it/"));h.setConnectTimeout(10000);h.setReadTimeout(10000);try{assertTrue(h.getResponseCode()>0);}finally{h.disconnect();}}
