@@ -2,6 +2,8 @@
 
 ## Confirmed defects in 0.1.0
 
+Android integration reproduced successful physical-network HTTPS followed by reset TCP/HTTPS through the TUN. Relay diagnostics isolated `vpn.protect(socket)` returning false for every new unconnected TCP `Socket`. Android `Socket.getFileDescriptor$()` does not force creation of a native fd: the relay threw `Impossibile proteggere socket` and closed each connection before forwarding. DatagramSocket was already bound, so DNS could still work. This is the reproduced primary cause of total TCP browsing failure. The fix binds an ephemeral local port first, then protects and binds the fd to the physical network, all before connecting. The Samsung S23 Ultra was not directly attached; the same failure was reproduced on Android API 30.
+
 `ProtectedNetwork.denied()` denied every UDP/443 packet and every connection on port 853, without considering the destination. `bypass.txt` was merged into the gambling feed, so DNS providers such as dns.google were denied through DNS and TLS SNI. Browser Secure DNS in strict mode cannot fall back reliably, and QUIC-only applications cannot fall back to TCP at all. These are provider/protocol bans, not gambling filtering.
 
 The upstream DNS path used only 1.1.1.1/9.9.9.9 over UDP, retrying TCP only for a truncated reply. Networks restricting external UDP/53 could therefore make all allowed name resolutions fail. DNS handling synchronously occupied the UDP relay while awaiting upstream replies. Tunnel health only checked a native thread flag: an alive but non-forwarding tunnel retained both default routes indefinitely. These defects explain mechanisms for total loss of connectivity; the original user's phone/network logs were not available to isolate which mechanism triggered their incident.

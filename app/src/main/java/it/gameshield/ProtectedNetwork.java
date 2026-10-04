@@ -36,6 +36,9 @@ public final class ProtectedNetwork implements ProxyNetwork {
     public Socket socket(InetAddress ip, int port) throws IOException {
         Socket socket = new Socket();
         try {
+            // Android new Socket() has no kernel fd yet; protect(Socket) would return false.
+            // Materialize a bound fd first, still BEFORE connect, avoiding VPN recursion.
+            socket.bind(new InetSocketAddress(0));
             if (!vpn.protect(socket)) throw new IOException("Impossibile proteggere socket");
             Network physical = underlying(); if (physical != null) physical.bindSocket(socket);
             socket.connect(new InetSocketAddress(ip, port), 10000); socket.setSoTimeout(60000); return socket;
