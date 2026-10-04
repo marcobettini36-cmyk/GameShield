@@ -1,22 +1,19 @@
-# GameShield 0.2.0 — verifica della correzione VPN
+# GameShield 0.3.0 — verifica forwarding VPN
 
-Verificato il 2026-10-04 02:36 +0200 (Europe/Rome).
+Sorgente verificato: `7faf35be094a615b7ce8ebdfe076a52f3e3f00aa`. [Build e test Android riusciti](https://github.com/marcobettini36-cmyk/GameShield/actions/runs/37193692116).
 
-- Causa primaria riprodotta su Android: nuovo Socket TCP senza fd nativo valido, protect(Socket) restituiva false e il relay resettava ogni connessione. Corretto bind locale effimero prima di protect e connect. DNS UDP era già inizializzato.
-- Build Android Normal debug/release e Strong debug/release: riuscite, AGP 8.10.1, Gradle 8.11.1, JDK 17, SDK 35, NDK 28.2.13676358.
-- 74 test JVM superati (37 per variante): domini, parsing completo della lista inclusa, pacchetti DNS/CNAME, codice custode, TLS SNI e connessioni reali SOCKS TCP/UDP. Zero errori/fallimenti.
-- 5 test Python superati per la normalizzazione e l'estrazione della directory ADM.
-- Lint di entrambe le varianti superato, zero errori. Avvisi non bloccanti per versioni fissate degli strumenti, scritture sincrone di sicurezza e localizzazione italiana.
-- APK debug firmati con chiave locale di test e verificati con apksigner. APK release non firmati, da firmare con la chiave stabile del proprietario prima dell'installazione.
-- Tre ABI: arm64-v8a, armeabi-v7a, x86_64. Verificati allineamento ELF a 16 KB e allineamento ZIP APK a 16 KB.
-- Asset di ciascuno dei quattro APK verificato byte per byte rispetto al feed pubblicabile.
-- Blacklist: 586,653 domini unici. Fonti: HaGeZi (578,451), ADM inibiti (12,072), ADM autorizzati (52) e regole curate. Nessun errore di acquisizione. Non garantisce ogni nuovo dominio/mirror.
-- Android 11 API 30 su runner GitHub KVM: 12 test di integrazione superati (3 test × 2 edizioni × Private DNS Off/Automatico). Verificati TUN HEV nativo, DNS Android/UDP, TCP 443, HTTPS Google/Wikipedia/GitHub e provider DoH, DNS Playzilla/Excitewin/bet365/stake, TLS con IP cached, WebView Chromium, fail-open Normal e TUN mantenuto Strong su guasto del relay. Chrome, Samsung Internet e Samsung S23 Ultra NON testati direttamente. Applicazione/rilascio Device Owner e lockdown OEM ancora da collaudare.
-- GitHub: progetto pubblicato su [marcobettini36-cmyk/GameShield](https://github.com/marcobettini36-cmyk/GameShield). [Build Actions riuscita](https://github.com/marcobettini36-cmyk/GameShield/actions/runs/37164797794): test, lint e quattro APK, con artifact Normal, Strong, release non firmati e report disponibili.
-- [Aggiornamento automatico delle blacklist verificato](https://github.com/marcobettini36-cmyk/GameShield/actions/runs/37160598896): acquisizione, test e pubblicazione sul branch main riusciti; esecuzione giornaliera configurata alle 04:21 UTC. La versione 0.2.0 rimuove i nove provider DNS erroneamente inclusi nella lista; la generazione esclude quei provider anche nei futuri aggiornamenti.
+- Quattro APK Normal/Strong debug/release compilati; lint entrambe le edizioni superato.
+- 82 test JVM superati (41 per edizione), 5 test Python superati.
+- Confronto del relay reale: 0.2.0 fallisce 3 regressioni (server-first, upload dopo FIN, nona destinazione UDP); 0.3.0 passa tutti i 14 test SOCKS TCP/UDP. Log allegati.
+- Android 15 API 35 Google Play: preflight nativo e suite completa in entrambe le edizioni con Private DNS Off/Automatico. Report strumentazione e logcat disponibili negli Artifacts.
+- Verificati DNS/TCP 443/HTTPS google.it, youtube.com, wikipedia.org, github.com; navigazione WebView e Chrome su Google; DNS e TLS con IP cached Playzilla/Excitewin; bet365/stake; dominio utente example.com via RELOAD.
+- Tre minuti di HTTPS concorrente per combinazione edizione/Private DNS, senza rimozione o sostituzione della VPN; più cicli di self-test. Peer fisico controllato verifica FIN, download e upload completi, senza reset.
+- Google Play: endpoint HTTPS e avvio app; screenshot allegati. Nessun account configurato, quindi acquisti/download autenticati non verificati.
+- Guasto relay: un fallimento mantiene Normal; tre fallimenti consecutivi con HTTPS fisico funzionante rimuovono Normal e ripristinano navigazione. Strong mantiene TUN dopo lo stesso guasto confermato.
+- APK debug firmati con la chiave locale di test; release non firmati. Tre ABI e allineamento ELF/ZIP a 16 KB verificati. Lista invariata in questa correzione, verificata byte per byte negli APK.
 
-## Contenuto
+Il Samsung S23 Ultra non è collegato: non dichiaro verificata la soluzione sul suo firmware. Samsung Internet, Chrome Secure DNS, rete fisica solo IPv6, cambi rete OEM e provisioning/lockdown Device Owner restano verifiche specifiche del dispositivo.
 
-GameShield-source.zip include codice app, Gradle wrapper, workflow Actions, snapshot delle liste, licenze e sorgenti nativi completi con dipendenze. Esclude cache, SDK, chiavi e credenziali. Normal richiede Android 10+, Strong Android 11+ e provisioning Device Owner.
+Difetti individuati nel percorso reale: IPv6 annunciato dal TUN su una rete fisica senza connettivita IPv6, con handshake sintetico scelto dal browser e successivo reset; chiusura completa del relay su FIN unidirezionale; abort/RST nativo anche dopo trasferimenti conclusi; perdita di byte durante classificazione incompleta e limite UDP troppo basso. Corrette anche la chiusura esplicita del TUN, la distinzione tra registrazione iniziale e percorso pacchetti pronto, il rilascio del descrittore solo dopo join JNI, la pulizia dei PCB al riavvio e i timer SYN/FIN/TIME_WAIT. Normal OFF viene verificata con DNS e socket ordinari non protetti e non legati a una rete secondaria.
 
-I limiti comprendono domini non censiti, IP diretti, DoH combinato con ECH/SNI non visibile, TLS/QUIC frammentato e tunnel applicativi. Nessun blocco indiscriminato di UDP/443 o 853. Self-test di connettività post-avvio e periodico; Normal rilascia VPN su errore, Strong mantiene TUN. Device Owner non impedisce root, recovery/reflash o bootloader sbloccato. Una sola VPN può essere attiva.
+La correzione interviene nel relay Java, nel routing delle famiglie IP e nella chiusura TCP nativa. Non usa MITM e non disattiva subito la VPN per nascondere un errore. Dettagli e limiti in FORWARDING_03.md. Log domini/trasporto temporanei nei debug APK: 15 minuti, senza payload o codici custode.
