@@ -47,7 +47,14 @@ public class TunnelDeviceTest {
     private Network start() throws Exception {
         context.startForegroundService(new Intent(context, ShieldVpnService.class));
         for (int i=0;i<450 && (vpn()==null || !ShieldVpnService.running);i++) SystemClock.sleep(200);
-        assertTrue("Native tunnel did not start: " + context.getSharedPreferences("shield",0).getString("error","no service error recorded"), ShieldVpnService.running); assertNotNull(vpn()); return vpn();
+        assertTrue("Native tunnel did not start: " + context.getSharedPreferences("shield",0).getString("error","no service error recorded"), ShieldVpnService.running); assertNotNull(vpn());
+        // NetworkAgent visibility precedes netd's per-UID access rules on busy Android 15 boot.
+        IOException registration = null;
+        for(int i=0;i<40;i++) {
+            try(Socket socket=new Socket()) { vpn().bindSocket(socket); return vpn(); }
+            catch(IOException pending) { registration=pending; SystemClock.sleep(250); }
+        }
+        throw new IOException("VPN network UID rules not ready: " + cm.getNetworkCapabilities(vpn()),registration);
     }
     @Test public void testAllowedAndBlockedTrafficThroughNativeTunnel() throws Exception {
         // Baseline: don't mistake an unavailable runner network for a VPN regression.

@@ -70,10 +70,11 @@ public final class LocalProxy implements AutoCloseable {
                 // Download runs immediately: server-first TCP must not wait for a ClientHello.
                 // EOF half-closes only the corresponding output; the other direction stays alive.
                 CountDownLatch downloaded = new CountDownLatch(1);
-                client.setSoTimeout(0); remote.setSoTimeout(0);
+                java.util.concurrent.atomic.AtomicLong lastTraffic = new java.util.concurrent.atomic.AtomicLong(System.nanoTime());
+                client.setSoTimeout(30000); remote.setSoTimeout(30000);
                 try {
                     workers.execute(() -> {
-                        try { copy(remote.getInputStream(), client.getOutputStream()); client.shutdownOutput(); }
+                        try { copy(remote.getInputStream(), client.getOutputStream(), lastTraffic); client.shutdownOutput(); }
                         catch (IOException error) {
                             if (running && !client.isClosed()) network.diagnostic("TCP return " + address.getHostAddress() + ":" + port, error);
                             closeResource(client); closeResource(remote);
@@ -87,10 +88,11 @@ public final class LocalProxy implements AutoCloseable {
                     String host = port == 80 ? httpHost(first) : TlsNames.sni(first);
                     if (network.denied(host, port, false)) return;
                     remote.getOutputStream().write(first); remote.getOutputStream().flush();
+                    lastTraffic.set(System.nanoTime());
                 }
-                client.setSoTimeout(0);
+                client.setSoTimeout(30000);
                 phase = "TCP upload " + address.getHostAddress() + ":" + port;
-                try { copy(in, remote.getOutputStream()); remote.shutdownOutput();
+                try { copy(in, remote.getOutputStream(), lastTraffic); remote.shutdownOutput();
                     try { downloaded.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 } finally { closeResource(remote); }
             } finally { live.remove(remote); }
@@ -202,7 +204,20 @@ public final class LocalProxy implements AutoCloseable {
     }
     private static void reply(DataOutputStream out, int status, int port) throws IOException { out.write(new byte[]{5, (byte) status, 0, 1, 127, 0, 0, 1}); out.writeShort(port); out.flush(); }
     public static byte[] readAll(InputStream in, int limit) throws IOException { ByteArrayOutputStream out = new ByteArrayOutputStream(); byte[] b = new byte[8192]; for (int n; (n = in.read(b)) != -1;) { out.write(b, 0, n); if (out.size() > limit) throw new IOException("Too large"); } return out.toByteArray(); }
-    private static void copy(InputStream in, OutputStream out) throws IOException { byte[] b = new byte[16384]; for (int n; (n = in.read(b)) != -1;) { out.write(b, 0, n); out.flush(); } }
+    private static void copy(InputStream in, OutputStream out, java.util.concurrent.atomic.AtomicLong lastTraffic) throws IOException {
+        byte[] buffer = new byte[16384];
+        while (true) {
+            int count;
+            try { count = in.read(buffer); }
+            catch (SocketTimeoutException idle) {
+                // Activity in either direction keeps the connection alive, including long uploads.
+                if (System.nanoTime() - lastTraffic.get() < TimeUnit.MINUTES.toNanos(30)) continue;
+                throw new SocketTimeoutException("TCP idle in both directions for 30 minutes");
+            }
+            if (count < 0) return;
+            out.write(buffer, 0, count); out.flush(); lastTraffic.set(System.nanoTime());
+        }
+    }
     private static void closeResource(Closeable c) { try { c.close(); } catch (IOException ignored) {} }
     @Override public void close() { running = false; closeResource(listener); for (Closeable c : live) closeResource(c); live.clear(); workers.shutdownNow(); dnsWorkers.shutdownNow(); }
     private static final class Endpoint {
