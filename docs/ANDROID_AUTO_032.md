@@ -74,6 +74,11 @@ solo dall’utente dell’emulatore e verifica anche il caso realmente assente,
 poi ripristina il pacchetto prima dei test browser. Eseguiti tramite GitHub Actions insieme ai
 test esistenti di traffico reale, Chrome, Play Store e disattivazione Normal,
 con Private DNS Off/Automatico su emulatore Android 35.
+La matrice DNS Off comprende un vero riavvio dell’emulatore e controllo
+del ripristino VPN/self-test. Strong viene provisionato Device Owner sul
+solo emulatore usa-e-getta, verificando la allowlist stretta e lockdown
+durante attivazione/rimozione dell’eccezione; il rilascio custode rimuove
+l’owner a fine prova. Le restrizioni debug non vengono applicate al runner.
 Gli esiti effettivi e gli APK sono registrati nel report consegnato.
 
 Collaudi fisici ancora necessari, non simulati dagli emulatori:

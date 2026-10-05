@@ -29,7 +29,7 @@ public class AndroidAutoDeviceTest {
         while((!ShieldVpnService.running||vpn()==null)&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(200);
         active();SystemClock.sleep(2500);blocked();
     }
-    @After public void after(){if(screen!=null)ui(screen::finish);stop();for(String p:new String[]{"android_auto","guardian","normal_disable_pin"})c.getSharedPreferences(p,0).edit().clear().commit();}
+    @After public void after(){if(screen!=null)ui(screen::finish);if(!"true".equals(InstrumentationRegistry.getArguments().getString("leaveRunning")))stop();for(String p:new String[]{"android_auto","guardian","normal_disable_pin"})c.getSharedPreferences(p,0).edit().clear().commit();}
     private void stop(){if(vpn()!=null||ShieldVpnService.running)c.startService(new Intent(c,ShieldVpnService.class).setAction("STOP"));else c.stopService(new Intent(c,ShieldVpnService.class));for(int i=0;i<100&&(ShieldVpnService.running||vpn()!=null);i++)SystemClock.sleep(100);SystemClock.sleep(1000);}
     private Network vpn(){for(Network n:cm.getAllNetworks()){NetworkCapabilities caps=cm.getNetworkCapabilities(n);if(caps!=null&&caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN))return n;}return null;}
     private void active(){assertTrue("VPN stopped accidentally",ShieldVpnService.running);assertNotNull(vpn());}

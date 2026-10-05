@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Dedicated Android emulator only. Exercise real TUN with Private DNS Off/Automatic."""
-import pathlib, subprocess, sys
+import pathlib, subprocess, sys, time, xml.etree.ElementTree as ET
 apks = pathlib.Path(sys.argv[1])
 reports = pathlib.Path('device-reports'); reports.mkdir(exist_ok=True)
 peer = subprocess.Popen([sys.executable, 'scripts/transport_peer.py'])
@@ -87,5 +87,56 @@ for edition in editions:
             str(reports / f'{edition}-{mode}-chrome.png')], check=False, capture_output=True)
         print(f'{edition}/{mode}:\n{result}', flush=True)
         if 'OK (5 tests)' not in result or 'FAILURES' in result: raise RuntimeError('Native tunnel instrumentation failed')
+
+    if 'off' in modes:
+        # BootReceiver / always-on acceptance on a disposable emulator, never a user device.
+        owner = edition == 'strong'
+        try:
+            if owner:
+                provision = adb('shell', 'dpm', 'set-device-owner', package + '/it.gameshield.AdminReceiver')
+                (reports / 'strong-owner-provision.txt').write_text(provision)
+                arm_class = 'it.gameshield.AndroidAutoOwnerDeviceTest#lockdownExceptionRemainsNarrowAndArmsReboot'
+                arm_args = []
+            else:
+                arm_class = 'it.gameshield.AndroidAutoDeviceTest#missingOrUntrustedHostAndForgedConnectionRetainFilter'
+                arm_args = ['-e', 'leaveRunning', 'true']
+            arm = adb('shell', 'am', 'instrument', '-w', '-r', *arm_args, '-e', 'class', arm_class,
+                package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=600)
+            (reports / f'{edition}-reboot-arm.txt').write_text(arm)
+            print(arm, flush=True)
+            if 'OK (1 test)' not in arm or 'FAILURES' in arm: raise RuntimeError('Cannot arm protected reboot test')
+            before_boot = adb('shell', 'settings', 'get', 'global', 'boot_count').strip()
+            adb('reboot'); adb('wait-for-disconnect', timeout=60); adb('wait-for-device', timeout=180)
+            deadline = time.monotonic() + 300
+            while time.monotonic() < deadline:
+                if adb('shell', 'getprop', 'sys.boot_completed').strip() == '1': break
+                time.sleep(2)
+            else: raise RuntimeError('Emulator did not finish actual reboot')
+            adb('shell', 'input', 'keyevent', '82')
+            after_boot = adb('shell', 'settings', 'get', 'global', 'boot_count').strip()
+            if before_boot == after_boot: raise RuntimeError('Boot counter did not change')
+            deadline = time.monotonic() + 300
+            while time.monotonic() < deadline:
+                try:
+                    text = adb('shell', 'run-as', package, 'cat', 'shared_prefs/shield.xml')
+                    root = ET.fromstring(text)
+                    flags = {e.get('name'): e.get('value') for e in root.findall('boolean')}
+                    nets = adb('shell', 'dumpsys', 'connectivity')
+                    if flags.get('wanted') == 'true' and flags.get('connectivityOk') == 'true' and 'Transports: VPN' in nets:
+                        (reports / f'{edition}-reboot-network.txt').write_text(nets)
+                        (reports / f'{edition}-reboot.txt').write_text(f'PASS: actual reboot {before_boot} -> {after_boot}; VPN present; wanted=true; internal DNS/TCP443/HTTPS self-test complete.\n')
+                        print(f'{edition}: actual reboot restored verified VPN', flush=True)
+                        break
+                except (RuntimeError, ET.ParseError): pass
+                time.sleep(2)
+            else: raise RuntimeError('Protection/self-test not restored after actual reboot')
+        finally:
+            (reports / f'{edition}-reboot-logcat.txt').write_text(adb('logcat', '-d', '-s', 'AndroidAuto:I', 'AndroidAutoOwnerTest:I', 'GameShieldVpn:I', 'GameShieldConnectivity:I', 'AndroidRuntime:E', '*:S'))
+            if owner:
+                cleanup = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                    'it.gameshield.AndroidAutoOwnerDeviceTest#custodianCleanup',
+                    package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=120)
+                (reports / 'strong-owner-cleanup.txt').write_text(cleanup)
+                if 'OK (1 test)' not in cleanup or 'FAILURES' in cleanup: raise RuntimeError('Disposable emulator custodian release failed')
 
     adb('shell', 'am', 'force-stop', package)
