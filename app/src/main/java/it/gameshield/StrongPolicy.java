@@ -54,7 +54,7 @@ public final class StrongPolicy {
         if (!new Guardian(context).authenticate(code)) throw new SecurityException("Codice errato o attesa attiva");
         synchronized(POLICY_LOCK) { releasePoliciesLocked(); }
     }
-    private void releasePoliciesLocked() {
+    private void releasePoliciesLocked() throws android.content.pm.PackageManager.NameNotFoundException {
         if (owner()) {
             manager.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_VPN);
             manager.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_PRIVATE_DNS);
