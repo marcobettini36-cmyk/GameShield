@@ -23,6 +23,9 @@ Il Builder usa `addDisallowedApplication()` esclusivamente per
 firmato con uno dei due certificati di produzione pubblicati da Android
 UAMP e con UID non condiviso. Package assente/rimosso/falso: nessuna eccezione.
 L'eccezione copre traffico IPv4, IPv6 e LAN di quel solo UID.
+La configurazione registra anche l’UID verificato: un cambio di UID dopo
+reinstallazione ricrea il TUN e aggiorna le UID ranges lockdown, anche
+quando il nome del pacchetto è invariato.
 
 Normal abilita la compatibilità per impostazione predefinita. Strong richiede
 opt-in e codice custode; se lockdown è già attivo, ne aggiorna soltanto

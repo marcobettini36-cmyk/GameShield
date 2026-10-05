@@ -24,21 +24,23 @@ final class AndroidAutoCompatibilityManager implements AutoCloseable {
     };
     AndroidAutoCompatibilityManager(Context context,Runnable changed){this.context=context;this.changed=changed;}
     static boolean enabled(Context c){return c.getSharedPreferences("android_auto",0).getBoolean("enabled",!BuildConfig.STRONG);}
-    static boolean trustedHost(Context c){
+    static boolean trustedHost(Context c){return trustedHostUid(c)>=0;}
+    static int trustedHostUid(Context c){
         PackageManager pm=c.getPackageManager();
         try{
             ApplicationInfo app=pm.getApplicationInfo(AndroidAutoPolicy.HOST,0);
-            if(!app.enabled || !AndroidAutoPolicy.isolatedHostUid(pm.getPackagesForUid(app.uid)))return false;
+            if(!app.enabled || !AndroidAutoPolicy.isolatedHostUid(pm.getPackagesForUid(app.uid)))return -1;
             for(String cert:AndroidAutoPolicy.RELEASE_CERTS)
-                if(pm.hasSigningCertificate(AndroidAutoPolicy.HOST,AndroidAutoPolicy.digest(cert),PackageManager.CERT_INPUT_SHA256))return true;
+                if(pm.hasSigningCertificate(AndroidAutoPolicy.HOST,AndroidAutoPolicy.digest(cert),PackageManager.CERT_INPUT_SHA256))return app.uid;
         }catch(PackageManager.NameNotFoundException|SecurityException ignored){/* Missing/untrusted host is not an error. */}
-        return false;
+        return -1;
     }
     static boolean trustedProvider(Context c){
         ProviderInfo p=c.getPackageManager().resolveContentProvider(AndroidAutoPolicy.AUTHORITY,0);
         return p!=null && p.enabled && AndroidAutoPolicy.HOST.equals(p.packageName) && trustedHost(c);
     }
-    static Set<String> requestedExclusions(Context c){return AndroidAutoPolicy.exclusions(enabled(c),trustedHost(c));}
+    static Map<String,Integer> requestedRoutes(Context c){return AndroidAutoPolicy.routing(enabled(c),trustedHostUid(c));}
+    static Set<String> requestedExclusions(Context c){return requestedRoutes(c).keySet();}
     void start(){
         IntentFilter f=new IntentFilter();f.addAction(Intent.ACTION_PACKAGE_ADDED);f.addAction(Intent.ACTION_PACKAGE_REMOVED);f.addAction(Intent.ACTION_PACKAGE_REPLACED);f.addAction(Intent.ACTION_PACKAGE_CHANGED);f.addDataScheme("package");
         if(Build.VERSION.SDK_INT>=33)context.registerReceiver(packages,f,Context.RECEIVER_NOT_EXPORTED);else context.registerReceiver(packages,f);
@@ -56,13 +58,14 @@ final class AndroidAutoCompatibilityManager implements AutoCloseable {
         if(value==projectionConnected)return;
         projectionConnected=value;Log.i("AndroidAuto",value?"projection connected":"disconnected");changed.run();
     }
-    Set<String> apply(android.net.VpnService.Builder builder){
-        Set<String> applied=new HashSet<>();
-        for(String pkg:requestedExclusions(context)){
-            try{builder.addDisallowedApplication(pkg);applied.add(pkg);}
+    Map<String,Integer> apply(android.net.VpnService.Builder builder){
+        Map<String,Integer> applied=new HashMap<>();
+        for(Map.Entry<String,Integer> entry:requestedRoutes(context).entrySet()){
+            String pkg=entry.getKey();
+            try{builder.addDisallowedApplication(pkg);applied.put(pkg,entry.getValue());}
             catch(PackageManager.NameNotFoundException gone){Log.i("AndroidAuto","host unavailable; full filtering retained");}
         }
-        return Collections.unmodifiableSet(applied);
+        return Collections.unmodifiableMap(applied);
     }
     static void recordRouting(Set<String> applied){
         boolean value=applied.contains(AndroidAutoPolicy.HOST);

@@ -14,8 +14,8 @@ final class AndroidAutoPolicy {
     static boolean projection(int type,boolean hostTrusted,boolean providerTrusted) {
         return type==2 && hostTrusted && providerTrusted;
     }
-    static Set<String> exclusions(boolean enabled,boolean hostTrusted) {
-        return enabled && hostTrusted ? Collections.singleton(HOST) : Collections.emptySet();
+    static Map<String,Integer> routing(boolean enabled,int verifiedUid) {
+        return enabled && verifiedUid>=0 ? Collections.singletonMap(HOST,verifiedUid) : Collections.emptyMap();
     }
     static boolean releaseCertificate(String digest) {
         return Arrays.asList(RELEASE_CERTS).contains(digest);

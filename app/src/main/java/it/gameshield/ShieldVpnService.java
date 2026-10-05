@@ -15,7 +15,7 @@ public final class ShieldVpnService extends VpnService {
     private LocalProxy proxy;
     private RuleStore store;
     private AndroidAutoCompatibilityManager androidAuto;
-    private Set<String> autoExclusions=Collections.emptySet();
+    private Map<String,Integer> autoRoutes=Collections.emptyMap();
     private ProtectedNetwork network;
     private ScheduledExecutorService worker;
     private final ExecutorService probes = Executors.newSingleThreadExecutor();
@@ -97,8 +97,9 @@ public final class ShieldVpnService extends VpnService {
             .addAddress("198.18.0.1", 32).addDnsServer("198.18.0.2")
             .addRoute("0.0.0.0", 0).setBlocking(false);
         if (ipv6) builder.addAddress("fd42:4753::1",128).addRoute("::",0);
-        Set<String> applied=androidAuto.apply(builder);
-        try { new StrongPolicy(this).syncAndroidAutoExceptions(applied); }
+        Map<String,Integer> appliedRoutes=androidAuto.apply(builder);
+        Set<String> applied=appliedRoutes.keySet();
+        try { new StrongPolicy(this).syncAndroidAutoExceptions(applied,!autoRoutes.equals(appliedRoutes)); }
         catch(android.content.pm.PackageManager.NameNotFoundException missing) { throw new IOException("Android Auto changed during routing setup",missing); }
         Network physical = network.underlying();
         lastUnderlying = physical;
@@ -108,7 +109,7 @@ public final class ShieldVpnService extends VpnService {
         File file = new File(getFilesDir(), "tunnel.yml");
         try (FileOutputStream out = new FileOutputStream(file)) { out.write(config.getBytes(StandardCharsets.UTF_8)); }
         if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
-        autoExclusions=applied;AndroidAutoCompatibilityManager.recordRouting(applied);
+        autoRoutes=appliedRoutes;AndroidAutoCompatibilityManager.recordRouting(applied);
         ipv6Enabled = ipv6; familyCheckedAt = SystemClock.elapsedRealtime(); running = true;
         transportGeneration++;
         getSharedPreferences("shield",0).edit().putBoolean("connectivityOk",false).apply();
@@ -192,13 +193,13 @@ public final class ShieldVpnService extends VpnService {
         if (changed) {
             setUnderlyingNetworks(physical == null ? null : new Network[]{physical}); lastUnderlying = physical;
         }
-        boolean autoChanged=!autoExclusions.equals(AndroidAutoCompatibilityManager.requestedExclusions(this));
+        boolean autoChanged=!autoRoutes.equals(AndroidAutoCompatibilityManager.requestedRoutes(this));
         if (changed || autoChanged || SystemClock.elapsedRealtime() - familyCheckedAt > 60000) {
             boolean ipv6 = network.ipv6Available(); familyCheckedAt = SystemClock.elapsedRealtime();
             if (ipv6 != ipv6Enabled || autoChanged) {
                 synchronized(lifecycle) {
                     if (!active) return;
-                    if(ipv6==ipv6Enabled && autoExclusions.equals(AndroidAutoCompatibilityManager.requestedExclusions(this)))return;
+                    if(ipv6==ipv6Enabled && autoRoutes.equals(AndroidAutoCompatibilityManager.requestedRoutes(this)))return;
                     running = false;
                     try {
                         proxy.close(); TProxyService.TProxyStopService();

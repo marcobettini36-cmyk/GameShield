@@ -33,10 +33,13 @@ public final class StrongPolicy {
     }
     /** Keep lockdown enabled; only the verified host exception approved in protected settings. */
     void syncAndroidAutoExceptions(java.util.Set<String> packages) throws android.content.pm.PackageManager.NameNotFoundException {
+        syncAndroidAutoExceptions(packages,false);
+    }
+    void syncAndroidAutoExceptions(java.util.Set<String> packages,boolean refreshUidRanges) throws android.content.pm.PackageManager.NameNotFoundException {
         if(!AndroidAutoCompatibilityManager.requestedExclusions(context).containsAll(packages))throw new SecurityException("Unverified Android Auto exception");
         if(!owner() || !locked() || !context.getPackageName().equals(manager.getAlwaysOnVpnPackage(admin)) || !manager.isAlwaysOnVpnLockdownEnabled(admin))return;
         java.util.Set<String> existing=manager.getAlwaysOnVpnLockdownWhitelist(admin);
-        if(!new java.util.HashSet<>(existing==null?java.util.Collections.emptySet():existing).equals(packages))
+        if(refreshUidRanges || !new java.util.HashSet<>(existing==null?java.util.Collections.emptySet():existing).equals(packages))
             manager.setAlwaysOnVpnPackage(admin,context.getPackageName(),true,packages);
     }
     /** Only called after guardian verification; VPN remains running until restrictions are removed. */

@@ -4,11 +4,11 @@ import java.util.Collections;
 import static org.junit.Assert.*;
 public class AndroidAutoPolicyTest {
     @Test public void onlyVerifiedHostCanBeExcluded() {
-        assertEquals(Collections.singleton(AndroidAutoPolicy.HOST),AndroidAutoPolicy.exclusions(true,true));
-        assertTrue(AndroidAutoPolicy.exclusions(false,true).isEmpty());
-        assertTrue(AndroidAutoPolicy.exclusions(true,false).isEmpty());
-        assertFalse(AndroidAutoPolicy.exclusions(true,true).contains("com.google.android.gms"));
-        assertFalse(AndroidAutoPolicy.exclusions(true,true).contains("com.android.chrome"));
+        assertEquals(Collections.singleton(AndroidAutoPolicy.HOST),AndroidAutoPolicy.routing(true,10112).keySet());
+        assertTrue(AndroidAutoPolicy.routing(false,10112).keySet().isEmpty());
+        assertTrue(AndroidAutoPolicy.routing(true,-1).keySet().isEmpty());
+        assertFalse(AndroidAutoPolicy.routing(true,10112).keySet().contains("com.google.android.gms"));
+        assertFalse(AndroidAutoPolicy.routing(true,10112).keySet().contains("com.android.chrome"));
     }
     @Test public void sharedUidIsRejected() {
         assertTrue(AndroidAutoPolicy.isolatedHostUid(new String[]{AndroidAutoPolicy.HOST}));
@@ -23,6 +23,12 @@ public class AndroidAutoPolicyTest {
         assertFalse(AndroidAutoPolicy.projection(1,true,true));
         assertFalse(AndroidAutoPolicy.projection(2,false,true));
         assertFalse(AndroidAutoPolicy.projection(2,true,false));
+    }
+    @Test public void uidChangeInvalidatesRoutingEvenWithSamePackage() {
+        assertEquals(Collections.singletonMap(AndroidAutoPolicy.HOST,10112),AndroidAutoPolicy.routing(true,10112));
+        assertNotEquals(AndroidAutoPolicy.routing(true,10112),AndroidAutoPolicy.routing(true,10113));
+        assertTrue(AndroidAutoPolicy.routing(false,10112).isEmpty());
+        assertTrue(AndroidAutoPolicy.routing(true,-1).isEmpty());
     }
     @Test public void productionCertificatesOnly() {
         assertEquals(2,AndroidAutoPolicy.RELEASE_CERTS.length);
