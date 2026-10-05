@@ -25,7 +25,11 @@ UAMP e con UID non condiviso. Package assente/rimosso/falso: nessuna eccezione.
 L'eccezione copre traffico IPv4, IPv6 e LAN di quel solo UID.
 La configurazione registra anche l’UID verificato: un cambio di UID dopo
 reinstallazione ricrea il TUN e aggiorna le UID ranges lockdown, anche
-quando il nome del pacchetto è invariato.
+quando il nome del pacchetto è invariato. Android 15 confronta i nomi
+per il handover in-place: nel raro cambio di UID a nome invariato si usa
+un breve passaggio senza alcuna eccezione app per forzare un NetworkAgent
+fresco, prima di applicare di nuovo il solo host verificato. Questo non
+abilita bypass o route generiche e non avviene collegando/scollegando l’auto.
 
 Normal abilita la compatibilità per impostazione predefinita. Strong richiede
 opt-in e codice custode; se lockdown è già attivo, ne aggiorna soltanto

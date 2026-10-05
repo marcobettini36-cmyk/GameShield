@@ -89,14 +89,18 @@ public final class ShieldVpnService extends VpnService {
         });
         return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
     }
+    private Builder transportBuilder(boolean ipv6) {
+        Builder builder = new Builder().setSession("GameShield").setMtu(1500)
+            .addAddress("198.18.0.1",32).addDnsServer("198.18.0.2")
+            .addRoute("0.0.0.0",0).setBlocking(false);
+        if(ipv6)builder.addAddress("fd42:4753::1",128).addRoute("::",0);
+        return builder;
+    }
     private void establishTransport(boolean ipv6) throws IOException {
         byte[] random = new byte[24]; new SecureRandom().nextBytes(random);
         String password = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
         proxy = new LocalProxy(network, "gameshield", password);
-        Builder builder = new Builder().setSession("GameShield").setMtu(1500)
-            .addAddress("198.18.0.1", 32).addDnsServer("198.18.0.2")
-            .addRoute("0.0.0.0", 0).setBlocking(false);
-        if (ipv6) builder.addAddress("fd42:4753::1",128).addRoute("::",0);
+        Builder builder = transportBuilder(ipv6);
         Map<String,Integer> appliedRoutes=androidAuto.apply(builder);
         Set<String> applied=appliedRoutes.keySet();
         try { new StrongPolicy(this).syncAndroidAutoExceptions(applied,!autoRoutes.equals(appliedRoutes)); }
@@ -104,6 +108,15 @@ public final class ShieldVpnService extends VpnService {
         Network physical = network.underlying();
         lastUnderlying = physical;
         if (physical != null) builder.setUnderlyingNetworks(new Network[]{physical});
+        if(AndroidAutoPolicy.requiresUidRebind(autoRoutes,appliedRoutes)) {
+            // Android's in-place handover compares package names, not newly assigned UIDs.
+            // A short intermediate configuration without ANY app exception forces a fresh agent.
+            Builder rebind=transportBuilder(ipv6);
+            if(physical!=null)rebind.setUnderlyingNetworks(new Network[]{physical});
+            try(ParcelFileDescriptor intermediate=rebind.establish()) {
+                if(intermediate==null)throw new IOException("VPN UID refresh not authorized");
+            }
+        }
         tunnel = builder.establish(); if (tunnel == null) throw new IOException("Consenso VPN mancante");
         String config = "tunnel:\n  mtu: 1500\n  ipv4: 198.18.0.1\n" + (ipv6 ? "  ipv6: 'fd42:4753::1'\n" : "") + "socks5:\n  address: 127.0.0.1\n  port: " + proxy.port() + "\n  udp: 'udp'\n  username: 'gameshield'\n  password: '" + password + "'\nmisc:\n  max-session-count: 128\n  tcp-read-write-timeout: 1800000\n  log-level: error\n";
         File file = new File(getFilesDir(), "tunnel.yml");

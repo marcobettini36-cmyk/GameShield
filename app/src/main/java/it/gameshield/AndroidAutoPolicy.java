@@ -17,6 +17,9 @@ final class AndroidAutoPolicy {
     static Map<String,Integer> routing(boolean enabled,int verifiedUid) {
         return enabled && verifiedUid>=0 ? Collections.singletonMap(HOST,verifiedUid) : Collections.emptyMap();
     }
+    static boolean requiresUidRebind(Map<String,Integer> previous,Map<String,Integer> next) {
+        return previous.keySet().equals(next.keySet()) && !previous.equals(next);
+    }
     static boolean releaseCertificate(String digest) {
         return Arrays.asList(RELEASE_CERTS).contains(digest);
     }

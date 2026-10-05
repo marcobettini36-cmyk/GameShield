@@ -27,6 +27,10 @@ public class AndroidAutoPolicyTest {
     @Test public void uidChangeInvalidatesRoutingEvenWithSamePackage() {
         assertEquals(Collections.singletonMap(AndroidAutoPolicy.HOST,10112),AndroidAutoPolicy.routing(true,10112));
         assertNotEquals(AndroidAutoPolicy.routing(true,10112),AndroidAutoPolicy.routing(true,10113));
+        assertTrue(AndroidAutoPolicy.requiresUidRebind(AndroidAutoPolicy.routing(true,10112),AndroidAutoPolicy.routing(true,10113)));
+        assertFalse(AndroidAutoPolicy.requiresUidRebind(AndroidAutoPolicy.routing(true,10112),AndroidAutoPolicy.routing(true,10112)));
+        assertFalse(AndroidAutoPolicy.requiresUidRebind(Collections.emptyMap(),AndroidAutoPolicy.routing(true,10112)));
+        assertFalse(AndroidAutoPolicy.requiresUidRebind(AndroidAutoPolicy.routing(true,10112),Collections.emptyMap()));
         assertTrue(AndroidAutoPolicy.routing(false,10112).isEmpty());
         assertTrue(AndroidAutoPolicy.routing(true,-1).isEmpty());
     }
