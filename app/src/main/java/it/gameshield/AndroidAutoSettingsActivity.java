@@ -50,7 +50,10 @@ public final class AndroidAutoSettingsActivity extends Activity {
                 try{
                     new StrongPolicy(this).syncAndroidAutoExceptions(AndroidAutoCompatibilityManager.requestedExclusions(this));
                     if(ShieldVpnService.running)startForegroundService(new Intent(this,ShieldVpnService.class).setAction("RECONFIGURE_AUTO"));render();
-                }catch(Exception error){p.edit().putBoolean("enabled",previous).commit();toast("Impostazione non applicata. Protezioni mantenute.");render();}
+                }catch(Exception error){p.edit().putBoolean("enabled",previous).commit();
+                    try { new StrongPolicy(this).syncAndroidAutoExceptions(AndroidAutoCompatibilityManager.requestedExclusions(this)); }
+                    catch(Exception pending) { android.util.Log.w("AndroidAuto","compatibility policy rollback pending"); }
+                    toast("Impostazione non applicata. Protezioni mantenute.");render();}
             }).show();
     }
     @Override protected void onStop(){if(dialog!=null)dialog.dismiss();super.onStop();}

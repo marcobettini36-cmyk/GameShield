@@ -48,6 +48,8 @@ Nessuna Accessibility, osservazione app in primo piano o pulsante pausa.
 L'impostazione rispetta il PIN opzionale Normal e il codice custode Strong.
 Autorizzazioni temporanee e dialoghi non sopravvivono alla chiusura della
 schermata. La modifica aggiorna le regole VPN senza cambiare liste/configurazione.
+Le riconfigurazioni e il controllo del motore sono serializzati sul lock
+di lifecycle; i callback prima della disponibilità del TUN sono ignorati.
 Log nuovi: solo stato connessione/routing, assenza host o query indisponibile.
 
 ## Fallback e limiti

@@ -31,7 +31,7 @@ public final class ShieldVpnService extends VpnService {
     @Override public void onCreate() {
         super.onCreate(); worker = Executors.newScheduledThreadPool(3);
         androidAuto=new AndroidAutoCompatibilityManager(this,()->{
-            if(active){foreground("Filtro VPN attivo");try{worker.execute(this::health);}catch(RejectedExecutionException ignored){}}
+            if(active && running){foreground("Filtro VPN attivo");try{worker.execute(this::health);}catch(RejectedExecutionException ignored){}}
         });
         androidAuto.start();
         getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("vpn", "Protezione GameShield", NotificationManager.IMPORTANCE_LOW));
@@ -176,6 +176,12 @@ public final class ShieldVpnService extends VpnService {
         stopSelf();
     }
     private void health() {
+        synchronized(lifecycle) {
+            if(network==null || tunnel==null)return;
+            healthLocked();
+        }
+    }
+    private void healthLocked() {
         if (!active) return;
         Network physical = network.underlying();
         boolean changed = !Objects.equals(physical, lastUnderlying);

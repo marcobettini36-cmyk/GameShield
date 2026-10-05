@@ -23,6 +23,8 @@ public class AndroidAutoDeviceTest {
         c.getSharedPreferences("guardian",0).edit().clear().commit();
         c.getSharedPreferences("normal_disable_pin",0).edit().clear().commit();
         assertNull(VpnService.prepare(c));c.startForegroundService(new Intent(c,ShieldVpnService.class));
+        // Reconfiguration arriving while the large rule snapshot is still loading must be harmless.
+        for(int i=0;i<3;i++)c.startForegroundService(new Intent(c,ShieldVpnService.class).setAction("RECONFIGURE_AUTO"));
         long until=SystemClock.elapsedRealtime()+180000;
         while((!ShieldVpnService.running||vpn()==null)&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(200);
         active();SystemClock.sleep(2500);blocked();
