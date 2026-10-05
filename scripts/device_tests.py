@@ -13,6 +13,10 @@ def adb(*args, timeout=60):
 adb('shell', 'settings', 'delete', 'global', 'private_dns_specifier')
 editions = (sys.argv[2],) if len(sys.argv) > 2 else ('normal', 'strong')
 modes = (sys.argv[3],) if len(sys.argv) > 3 else ('off', 'opportunistic')
+boot_only = '--boot-only' in sys.argv[4:]
+if boot_only:
+    if modes != ('off',): raise ValueError('Targeted reboot check requires Private DNS off')
+    adb('shell', 'settings', 'put', 'global', 'private_dns_mode', 'off')
 for edition in editions:
     package = 'it.gameshield' + ('.strong' if edition == 'strong' else '')
     for name in (f'app-{edition}-debug.apk', f'app-{edition}-debug-androidTest.apk'):
@@ -20,7 +24,7 @@ for edition in editions:
         if len(matches) != 1: raise RuntimeError(f'Expected one {name}, got {matches}')
         adb('install', '-r', str(matches[0]), timeout=120)
     adb('shell', 'appops', 'set', package, 'ACTIVATE_VPN', 'allow')
-    if edition == 'normal' and 'off' in modes:
+    if edition == 'normal' and 'off' in modes and not boot_only:
         adb('logcat', '-c')
         preflight = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
             'it.gameshield.TunnelDeviceTest#testNativeTcpFinAndHalfClose',
@@ -29,7 +33,7 @@ for edition in editions:
         (reports / 'startup-preflight-logcat.txt').write_text(adb('logcat', '-d', '-s', 'GameShieldVpn:I', 'GameShieldTransport:I', 'AndroidRuntime:E', 'ActivityManager:I', '*:S'))
         print(preflight, flush=True)
         if 'OK (1 test)' not in preflight: raise RuntimeError('Native TUN startup/FIN preflight failed')
-    for mode in modes:
+    for mode in (() if boot_only else modes):
         adb('shell', 'settings', 'put', 'global', 'private_dns_mode', mode)
         adb('logcat', '-c')
         adb('logcat', '-c')
@@ -108,6 +112,7 @@ for edition in editions:
             before_boot = adb('shell', 'settings', 'get', 'global', 'boot_count').strip()
             adb('reboot'); adb('wait-for-disconnect', timeout=60); adb('wait-for-device', timeout=180)
             deadline = time.monotonic() + 300
+            ready_samples = 0
             while time.monotonic() < deadline:
                 if adb('shell', 'getprop', 'sys.boot_completed').strip() == '1': break
                 time.sleep(2)
@@ -122,7 +127,11 @@ for edition in editions:
                     root = ET.fromstring(text)
                     flags = {e.get('name'): e.get('value') for e in root.findall('boolean')}
                     nets = adb('shell', 'dumpsys', 'connectivity')
-                    if flags.get('wanted') == 'true' and flags.get('connectivityOk') == 'true' and 'Transports: VPN' in nets:
+                    # LISTEN requests also contain "Transports: VPN" before any VPN exists.
+                    # Require an actual NetworkAgent and stable fresh readiness after startup.
+                    vpn_agent = any('NetworkAgentInfo{network{' in line and 'Transports: VPN' in line for line in nets.splitlines())
+                    ready_samples = ready_samples + 1 if flags.get('wanted') == 'true' and flags.get('connectivityOk') == 'true' and vpn_agent else 0
+                    if ready_samples >= 3:
                         (reports / f'{edition}-reboot-network.txt').write_text(nets)
                         (reports / f'{edition}-reboot.txt').write_text(f'PASS: actual reboot {before_boot} -> {after_boot}; VPN present; wanted=true; internal DNS/TCP443/HTTPS self-test complete.\n')
                         print(f'{edition}: actual reboot restored verified VPN', flush=True)

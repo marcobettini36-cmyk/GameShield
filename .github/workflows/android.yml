@@ -3,6 +3,11 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      boot_only:
+        description: 'Run targeted actual reboot checks (full matrix remains default)'
+        type: boolean
+        default: false
   workflow_run:
     workflows: ['Update gambling blacklist']
     types: [completed]
@@ -88,6 +93,7 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Exercise actual VPN data path and failure policies
+        if: inputs.boot_only != true || matrix.dns == 'off'
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -95,7 +101,7 @@ jobs:
           target: google_apis_playstore
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: python3 scripts/device_tests.py device-apks ${{ matrix.edition }} ${{ matrix.dns }}
+          script: python3 scripts/device_tests.py device-apks ${{ matrix.edition }} ${{ matrix.dns }} ${{ inputs.boot_only && '--boot-only' || '' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
