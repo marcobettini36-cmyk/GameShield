@@ -139,6 +139,8 @@ public final class ShieldVpnService extends VpnService {
             try { TProxyService.TProxyStopService(); } catch(LinkageError ignored) { }
             if (tunnel != null) try { tunnel.close(); } catch(IOException ignored) { }
             tunnel = null;
+            // A reconfiguration that was already holding lifecycle cannot leave stale UI flags.
+            running=false;AndroidAutoCompatibilityManager.routingApplied=false;
         }
     }
     private void connectivityTest() {

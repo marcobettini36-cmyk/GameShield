@@ -60,6 +60,9 @@ di lifecycle; i callback prima della disponibilità del TUN sono ignorati.
 RECONFIGURE_AUTO aggiorna soltanto una VPN già attiva: un messaggio
 consegnato dopo STOP non riavvia la protezione volontariamente disattivata.
 Il manager segue anche abilitazione/disabilitazione del pacchetto host.
+Attivazione, aggiornamento e rilascio delle policy Device Owner condividono
+un lock: un aggiornamento concorrente non può riabilitare always-on durante
+il rilascio custode. Le restrizioni e la verifica del codice restano identiche.
 Log nuovi: solo stato connessione/routing, assenza host o query indisponibile.
 
 ## Fallback e limiti

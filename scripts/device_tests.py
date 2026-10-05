@@ -138,5 +138,7 @@ for edition in editions:
                     package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=120)
                 (reports / 'strong-owner-cleanup.txt').write_text(cleanup)
                 if 'OK (1 test)' not in cleanup or 'FAILURES' in cleanup: raise RuntimeError('Disposable emulator custodian release failed')
+                always_on = adb('shell', 'settings', 'get', 'secure', 'always_on_vpn_app').strip()
+                if always_on not in ('', 'null'): raise RuntimeError('Custodian release left always-on configured')
 
     adb('shell', 'am', 'force-stop', package)

@@ -6,6 +6,7 @@ import android.os.*;
 import java.util.Collections;
 
 public final class StrongPolicy {
+    private static final Object POLICY_LOCK=new Object();
     private final Context context;
     private final DevicePolicyManager manager;
     private final ComponentName admin;
@@ -15,6 +16,9 @@ public final class StrongPolicy {
     public boolean owner() { return BuildConfig.STRONG && manager.isDeviceOwnerApp(context.getPackageName()); }
     public boolean locked() { return owner() && manager.isUninstallBlocked(admin, context.getPackageName()); }
     public void enable() throws android.content.pm.PackageManager.NameNotFoundException {
+        synchronized(POLICY_LOCK) { enableLocked(); }
+    }
+    private void enableLocked() throws android.content.pm.PackageManager.NameNotFoundException {
         if (!owner() || !new Guardian(context).configured()) throw new SecurityException("Device Owner e codice custode richiesti");
         if (!ShieldVpnService.running || !context.getSharedPreferences("shield", 0).getBoolean("connectivityOk", false))
             throw new SecurityException("Prima verifica DNS e HTTPS nel tunnel");
@@ -36,6 +40,9 @@ public final class StrongPolicy {
         syncAndroidAutoExceptions(packages,false);
     }
     void syncAndroidAutoExceptions(java.util.Set<String> packages,boolean refreshUidRanges) throws android.content.pm.PackageManager.NameNotFoundException {
+        synchronized(POLICY_LOCK) { syncAndroidAutoExceptionsLocked(packages,refreshUidRanges); }
+    }
+    private void syncAndroidAutoExceptionsLocked(java.util.Set<String> packages,boolean refreshUidRanges) throws android.content.pm.PackageManager.NameNotFoundException {
         if(!AndroidAutoCompatibilityManager.requestedExclusions(context).containsAll(packages))throw new SecurityException("Unverified Android Auto exception");
         if(!owner() || !locked() || !context.getPackageName().equals(manager.getAlwaysOnVpnPackage(admin)) || !manager.isAlwaysOnVpnLockdownEnabled(admin))return;
         java.util.Set<String> existing=manager.getAlwaysOnVpnLockdownWhitelist(admin);
@@ -45,6 +52,9 @@ public final class StrongPolicy {
     /** Only called after guardian verification; VPN remains running until restrictions are removed. */
     public void release(char[] code) throws Exception {
         if (!new Guardian(context).authenticate(code)) throw new SecurityException("Codice errato o attesa attiva");
+        synchronized(POLICY_LOCK) { releasePoliciesLocked(); }
+    }
+    private void releasePoliciesLocked() {
         if (owner()) {
             manager.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_VPN);
             manager.clearUserRestriction(admin, UserManager.DISALLOW_CONFIG_PRIVATE_DNS);
