@@ -42,6 +42,7 @@ public class AndroidAutoOwnerDeviceTest {
         assertTrue("CI must provision this disposable emulator",dpm.isDeviceOwnerApp(c.getPackageName()));
         c.getSharedPreferences("guardian",0).edit().clear().commit();new Guardian(c).setup(SECRET.toCharArray());
         c.getSharedPreferences("android_auto",0).edit().putBoolean("enabled",false).commit();
+        assertNull("Dedicated emulator must grant VPN app-op and prepare its package",VpnService.prepare(c));
         c.startForegroundService(new Intent(c,ShieldVpnService.class));ready(false);
         // Exercise only the changed policy surface. Do not disable ADB in the test runner.
         dpm.setAlwaysOnVpnPackage(admin,c.getPackageName(),true,Collections.emptySet());
