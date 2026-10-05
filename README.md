@@ -2,6 +2,8 @@
 
 App Android per ridurre l'accesso al gioco d'azzardo online, con due APK: **Normal** (Android 10+) e **Strong** (Android 11+, dispositivo dedicato provisionato come Device Owner).
 
+Compatibilit� Android Auto 0.3.2: [analisi, strategia e limiti del collaudo](docs/ANDROID_AUTO_032.md).
+
 ## Funzioni
 
 - VPN locale completa IPv4/IPv6 con motore tun2socks HEV, TCP e UDP; nessun server VPN remoto.
@@ -25,7 +27,7 @@ cd GameShield
 
 Su Windows usare `gradlew.bat`. Gradle materializza gli header linkati del submodule su Windows. Il wrapper è Gradle 8.11.1, AGP 8.10.1; il motore è fissato al commit `2cdc169a248ced7097a7931aea5bf81540dc7759` e le sue dipendenze ai gitlink di quel commit. ABI arm64-v8a, armeabi-v7a e x86_64; allineamento nativo a 16 KB.
 
-Gli APK debug sono in `app/build/outputs/apk/{normal,strong}/debug/`. GitHub Actions esegue test, lint e build di entrambe le varianti su ogni push/PR e offre APK come artifact. Un secondo job avvia Android 11 API 30 e verifica il TUN nativo, navigazione consentita, domini bloccati, Private DNS Off/Automatico e guasti del relay per entrambe le edizioni; i log sono nell’artifact native-tunnel-device-reports. Gli APK release sono **non firmati**: prima della distribuzione firmarli con una chiave stabile custodita dal proprietario. Le chiavi debug servono ai test e possono cambiare tra runner CI: non usarle per una flotta Strong.
+Gli APK debug sono in `app/build/outputs/apk/{normal,strong}/debug/`. GitHub Actions esegue test, lint e build di entrambe le varianti su ogni push/PR e offre APK come artifact. Un secondo job avvia Android 15 API 35 e verifica il TUN nativo, navigazione consentita, domini bloccati, Private DNS Off/Automatico e guasti del relay per entrambe le edizioni; i log sono nell’artifact native-tunnel-device-reports. Gli APK release sono **non firmati**: prima della distribuzione firmarli con una chiave stabile custodita dal proprietario. Le chiavi debug servono ai test e possono cambiare tra runner CI: non usarle per una flotta Strong.
 
 ## Blacklist e nuovi mirror
 

@@ -61,6 +61,7 @@ public final class MainActivity extends Activity {
                     }).show();
             });
             button(owner, "Rilascio del custode", this::release);
+            button(owner, "Compatibilità Android Auto", () -> startActivity(new Intent(this, AndroidAutoSettingsActivity.class)));
             button(owner, "Istruzioni Device Owner", () -> new AlertDialog.Builder(this).setTitle("Provisioning Strong")
                 .setMessage("Su dispositivo di test appena ripristinato, senza account, installa solo Strong e usa ADB:\n\nadb shell dpm set-device-owner it.gameshield.strong/it.gameshield.AdminReceiver\n\nPoi il custode imposta il codice, verifica che la VPN navighi e applica le protezioni. Le restrizioni possono dipendere dal produttore. Non applicarle al tuo unico dispositivo senza aver provato il rilascio.")
                 .setPositiveButton("Chiudi", null).show());
@@ -115,7 +116,9 @@ public final class MainActivity extends Activity {
         boolean running = ShieldVpnService.running, locked = new StrongPolicy(this).locked();
         boolean connected = prefs.getBoolean("connectivityOk", false);
         status.setText(running ? (connected ? "Protezione attiva" : "Verifica connettività VPN") : "Protezione disattivata");
+        if (running && connected && AndroidAutoCompatibilityManager.projectionConnected && AndroidAutoCompatibilityManager.routingApplied) status.setText("Protezione attiva - Compatibilità Android Auto");
         String message = locked ? "Strong: disinstallazione bloccata e VPN vincolata" : "VPN locale • filtro DNS, HTTP Host e TLS SNI";
+        if (AndroidAutoCompatibilityManager.projectionConnected) message += "\nAndroid Auto collegato";
         if (prefs.contains("error")) message += "\n" + prefs.getString("error", "");
         if (prefs.contains("updateError")) message += "\n" + prefs.getString("updateError", "");
         if (prefs.contains("connectivity")) message += "\n" + prefs.getString("connectivity", "");

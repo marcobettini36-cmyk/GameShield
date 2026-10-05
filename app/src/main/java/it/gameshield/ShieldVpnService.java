@@ -14,6 +14,8 @@ public final class ShieldVpnService extends VpnService {
     private ParcelFileDescriptor tunnel;
     private LocalProxy proxy;
     private RuleStore store;
+    private AndroidAutoCompatibilityManager androidAuto;
+    private Set<String> autoExclusions=Collections.emptySet();
     private ProtectedNetwork network;
     private ScheduledExecutorService worker;
     private final ExecutorService probes = Executors.newSingleThreadExecutor();
@@ -28,11 +30,16 @@ public final class ShieldVpnService extends VpnService {
     public static volatile boolean running;
     @Override public void onCreate() {
         super.onCreate(); worker = Executors.newScheduledThreadPool(3);
+        androidAuto=new AndroidAutoCompatibilityManager(this,()->{
+            if(active){foreground("Filtro VPN attivo");try{worker.execute(this::health);}catch(RejectedExecutionException ignored){}}
+        });
+        androidAuto.start();
         getSystemService(NotificationManager.class).createNotificationChannel(new NotificationChannel("vpn", "Protezione GameShield", NotificationManager.IMPORTANCE_LOW));
     }
     private void foreground(String text) {
         PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-        Notification note = new Notification.Builder(this, "vpn").setSmallIcon(R.drawable.shield).setContentTitle(getString(R.string.app_name)).setContentText(text).setContentIntent(open).setOngoing(true).build();
+        if(AndroidAutoCompatibilityManager.projectionConnected && AndroidAutoCompatibilityManager.routingApplied) text += " / Android Auto collegato";
+        Notification note = new Notification.Builder(this, "vpn").setOnlyAlertOnce(true).setSmallIcon(R.drawable.shield).setContentTitle(getString(R.string.app_name)).setContentText(text).setContentIntent(open).setOngoing(true).build();
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, note, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
         else startForeground(1, note);
     }
@@ -48,7 +55,8 @@ public final class ShieldVpnService extends VpnService {
                 proxy.close(); worker.execute(this::connectivityTest);
                 return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
             }
-            if (intent != null && "RELOAD".equals(intent.getAction())) worker.execute(() -> { try { store.reload(); getSharedPreferences("shield", 0).edit().putInt("rules", store.rules().size()).apply(); } catch (Exception e) { getSharedPreferences("shield", 0).edit().putString("error", e.getMessage()).apply(); } });
+            if (intent != null && "RECONFIGURE_AUTO".equals(intent.getAction())) worker.execute(this::health);
+            else if (intent != null && "RELOAD".equals(intent.getAction())) worker.execute(() -> { try { store.reload(); getSharedPreferences("shield", 0).edit().putInt("rules", store.rules().size()).apply(); } catch (Exception e) { getSharedPreferences("shield", 0).edit().putString("error", e.getMessage()).apply(); } });
             else if (intent != null && "UPDATE".equals(intent.getAction())) worker.execute(this::update);
             else foreground("Filtro VPN attivo");
             return BuildConfig.STRONG ? START_STICKY : START_NOT_STICKY;
@@ -85,6 +93,9 @@ public final class ShieldVpnService extends VpnService {
             .addAddress("198.18.0.1", 32).addDnsServer("198.18.0.2")
             .addRoute("0.0.0.0", 0).setBlocking(false);
         if (ipv6) builder.addAddress("fd42:4753::1",128).addRoute("::",0);
+        Set<String> applied=androidAuto.apply(builder);
+        try { new StrongPolicy(this).syncAndroidAutoExceptions(applied); }
+        catch(android.content.pm.PackageManager.NameNotFoundException missing) { throw new IOException("Android Auto changed during routing setup",missing); }
         Network physical = network.underlying();
         lastUnderlying = physical;
         if (physical != null) builder.setUnderlyingNetworks(new Network[]{physical});
@@ -93,6 +104,7 @@ public final class ShieldVpnService extends VpnService {
         File file = new File(getFilesDir(), "tunnel.yml");
         try (FileOutputStream out = new FileOutputStream(file)) { out.write(config.getBytes(StandardCharsets.UTF_8)); }
         if (!TProxyService.TProxyStartService(file.getAbsolutePath(), tunnel.getFd())) throw new IOException("Motore tunnel non avviato");
+        autoExclusions=applied;AndroidAutoCompatibilityManager.recordRouting(applied);
         ipv6Enabled = ipv6; familyCheckedAt = SystemClock.elapsedRealtime(); running = true;
         transportGeneration++;
         getSharedPreferences("shield",0).edit().putBoolean("connectivityOk",false).apply();
@@ -100,6 +112,7 @@ public final class ShieldVpnService extends VpnService {
     }
     private void deactivate() {
         active = false; running = false;
+        AndroidAutoCompatibilityManager.routingApplied=false;
         synchronized (lifecycle) {
             transportGeneration++;
             // JNI borrows this fd: join its I/O thread BEFORE Java releases/reuses it.
@@ -169,11 +182,13 @@ public final class ShieldVpnService extends VpnService {
         if (changed) {
             setUnderlyingNetworks(physical == null ? null : new Network[]{physical}); lastUnderlying = physical;
         }
-        if (changed || SystemClock.elapsedRealtime() - familyCheckedAt > 60000) {
+        boolean autoChanged=!autoExclusions.equals(AndroidAutoCompatibilityManager.requestedExclusions(this));
+        if (changed || autoChanged || SystemClock.elapsedRealtime() - familyCheckedAt > 60000) {
             boolean ipv6 = network.ipv6Available(); familyCheckedAt = SystemClock.elapsedRealtime();
-            if (ipv6 != ipv6Enabled) {
+            if (ipv6 != ipv6Enabled || autoChanged) {
                 synchronized(lifecycle) {
                     if (!active) return;
+                    if(ipv6==ipv6Enabled && autoExclusions.equals(AndroidAutoCompatibilityManager.requestedExclusions(this)))return;
                     running = false;
                     try {
                         proxy.close(); TProxyService.TProxyStopService();
@@ -197,6 +212,7 @@ public final class ShieldVpnService extends VpnService {
     @Override public void onRevoke() { deactivate(); getSharedPreferences("shield", 0).edit().putBoolean("wanted", false).apply(); stopSelf(); }
     @Override public void onDestroy() {
         active = false; running = false;
+        if (androidAuto != null) androidAuto.close();
         if (worker != null) worker.shutdownNow();
         probes.shutdownNow();
         synchronized (lifecycle) {

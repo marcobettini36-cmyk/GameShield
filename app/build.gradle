@@ -69,15 +69,15 @@ android {
         applicationId 'it.gameshield'
         minSdk 29
         targetSdk 35
-        versionCode 3
-        versionName '0.3.0'
+        versionCode 5
+        versionName '0.3.2'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
         externalNativeBuild { ndkBuild { arguments 'NDK_APPLICATION_MK:=' + file('../native/Application.mk').absolutePath; targets 'hev-socks5-tunnel' } }
         ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
     }
     flavorDimensions += 'protection'
     productFlavors {
-        normal { versionCode 4; versionName '0.3.1'; dimension 'protection'; buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
+        normal { dimension 'protection'; buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
         strong { dimension 'protection'; minSdk 30; applicationIdSuffix '.strong'; buildConfigField 'boolean', 'STRONG', 'true'; resValue 'string', 'app_name', 'GameShield Strong' }
     }
     buildFeatures { buildConfig true }
@@ -91,6 +91,7 @@ android {
     testOptions { unitTests.all { systemProperty 'gameshield.assets', file('src/main/assets').absolutePath } }
 }
 dependencies {
+    implementation "androidx.car.app:app:1.7.0"
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test:runner:1.6.2'
     androidTestImplementation 'junit:junit:4.13.2'

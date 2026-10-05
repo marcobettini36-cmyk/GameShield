@@ -44,6 +44,16 @@ for edition in editions:
                 raise RuntimeError('Normal deactivation UI tests failed')
 
         adb('logcat', '-c')
+        auto_result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+            'it.gameshield.AndroidAutoDeviceTest',
+            package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=360)
+        (reports / f'{edition}-{mode}-android-auto.txt').write_text(auto_result)
+        (reports / f'{edition}-{mode}-android-auto-logcat.txt').write_text(adb('logcat', '-d', '-s', 'AndroidAuto:I', 'AndroidAutoDeviceTest:I', 'GameShieldVpn:I', 'AndroidRuntime:E', '*:S'))
+        print(auto_result, flush=True)
+        if 'OK (2 tests)' not in auto_result or 'FAILURES' in auto_result:
+            raise RuntimeError('Android Auto security/UI regression tests failed')
+
+        adb('logcat', '-c')
         result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.TunnelDeviceTest',
             package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=900)
         (reports / f'{edition}-{mode}.txt').write_text(result)
