@@ -36,8 +36,8 @@ public final class AndroidAutoSettingsActivity extends Activity {
         dialog=new AlertDialog.Builder(this).setTitle(AndroidAutoAuthorization.title()).setView(box).setNegativeButton("Annulla",null).setPositiveButton("Verifica",null).create();
         AlertDialog current=dialog;current.setOnDismissListener(d->input.setText(""));current.setOnShowListener(d->{current.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);current.getButton(-1).setOnClickListener(v->{
             if(busy)return;char[] secret=input.getText().toString().toCharArray();input.setText("");busy=true;current.getButton(-1).setEnabled(false);
-            worker.execute(()->{boolean ok=false;try{ok=AndroidAutoAuthorization.authenticate(this,secret);}catch(Exception e){/* No secrets or raw exception details in logs. */}finally{Arrays.fill(secret,'\0');}
-                boolean authenticated=ok;main.post(()->{busy=false;if(isFinishing()||isDestroyed()||!current.isShowing())return;current.getButton(-1).setEnabled(true);if(!authenticated){error.setText("Verifica non riuscita. L’impostazione resta invariata.");return;}current.dismiss();confirm();});});
+            worker.execute(()->{boolean ok=false;try{ok=AndroidAutoAuthorization.authenticate(this,secret);}catch(Exception e){android.util.Log.w("AndroidAuto","credential verification unavailable: "+e.getClass().getSimpleName());}finally{Arrays.fill(secret,'\0');}
+                boolean authenticated=ok;android.util.Log.i("AndroidAuto",authenticated?"settings verification accepted":"settings verification rejected");main.post(()->{busy=false;if(isFinishing()||isDestroyed()||!current.isShowing())return;current.getButton(-1).setEnabled(true);if(!authenticated){error.setText("Verifica non riuscita. L’impostazione resta invariata.");return;}current.dismiss();confirm();});});
         });});current.show();
     }
     private void confirm(){

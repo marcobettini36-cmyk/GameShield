@@ -32,6 +32,36 @@ for edition in editions:
     for mode in modes:
         adb('shell', 'settings', 'put', 'global', 'private_dns_mode', mode)
         adb('logcat', '-c')
+        adb('logcat', '-c')
+        auto_result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+            'it.gameshield.AndroidAutoDeviceTest',
+            package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=360)
+        (reports / f'{edition}-{mode}-android-auto.txt').write_text(auto_result)
+        (reports / f'{edition}-{mode}-android-auto-logcat.txt').write_text(adb('logcat', '-d', '-s', 'AndroidAuto:I', 'AndroidAutoDeviceTest:I', 'GameShieldVpn:I', 'AndroidRuntime:E', '*:S'))
+        print(auto_result, flush=True)
+        if 'OK (2 tests)' not in auto_result or 'FAILURES' in auto_result:
+            raise RuntimeError('Android Auto security/UI regression tests failed')
+
+        # Dedicated emulator: prove PackageManager's genuinely absent-host path,
+        # then restore the original official system package before browser tests.
+        host = 'com.google.android.projection.gearhead'
+        installed = ('package:' + host) in adb('shell', 'pm', 'list', 'packages', '--user', '0', host)
+        if installed:
+            removed = adb('shell', 'pm', 'uninstall', '--user', '0', host)
+            if 'Success' not in removed: raise RuntimeError('Cannot prepare absent Android Auto fixture: ' + removed)
+        try:
+            adb('logcat', '-c')
+            absent = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'expectAbsent', 'true', '-e', 'class',
+                'it.gameshield.AndroidAutoDeviceTest#missingOrUntrustedHostAndForgedConnectionRetainFilter',
+                package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=300)
+            (reports / f'{edition}-{mode}-android-auto-absent.txt').write_text(absent)
+            (reports / f'{edition}-{mode}-android-auto-absent-logcat.txt').write_text(adb('logcat', '-d', '-s', 'AndroidAuto:I', 'AndroidAutoDeviceTest:I', 'GameShieldVpn:I', 'AndroidRuntime:E', '*:S'))
+            print(absent, flush=True)
+            if 'OK (1 test)' not in absent or 'FAILURES' in absent:
+                raise RuntimeError('Absent Android Auto regression failed')
+        finally:
+            if installed: adb('shell', 'cmd', 'package', 'install-existing', '--user', '0', host)
+
         if edition == 'normal':
             adb('logcat', '-c')
             ui_result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
@@ -42,16 +72,6 @@ for edition in editions:
             print(ui_result, flush=True)
             if 'OK (2 tests)' not in ui_result or 'FAILURES' in ui_result:
                 raise RuntimeError('Normal deactivation UI tests failed')
-
-        adb('logcat', '-c')
-        auto_result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
-            'it.gameshield.AndroidAutoDeviceTest',
-            package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=360)
-        (reports / f'{edition}-{mode}-android-auto.txt').write_text(auto_result)
-        (reports / f'{edition}-{mode}-android-auto-logcat.txt').write_text(adb('logcat', '-d', '-s', 'AndroidAuto:I', 'AndroidAutoDeviceTest:I', 'GameShieldVpn:I', 'AndroidRuntime:E', '*:S'))
-        print(auto_result, flush=True)
-        if 'OK (2 tests)' not in auto_result or 'FAILURES' in auto_result:
-            raise RuntimeError('Android Auto security/UI regression tests failed')
 
         adb('logcat', '-c')
         result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.TunnelDeviceTest',

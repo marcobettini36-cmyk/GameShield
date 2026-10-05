@@ -30,7 +30,7 @@ public class AndroidAutoDeviceTest {
         active();SystemClock.sleep(2500);blocked();
     }
     @After public void after(){if(screen!=null)ui(screen::finish);stop();for(String p:new String[]{"android_auto","guardian","normal_disable_pin"})c.getSharedPreferences(p,0).edit().clear().commit();}
-    private void stop(){c.stopService(new Intent(c,ShieldVpnService.class));for(int i=0;i<100&&(ShieldVpnService.running||vpn()!=null);i++)SystemClock.sleep(100);SystemClock.sleep(1000);}
+    private void stop(){if(vpn()!=null||ShieldVpnService.running)c.startService(new Intent(c,ShieldVpnService.class).setAction("STOP"));else c.stopService(new Intent(c,ShieldVpnService.class));for(int i=0;i<100&&(ShieldVpnService.running||vpn()!=null);i++)SystemClock.sleep(100);SystemClock.sleep(1000);}
     private Network vpn(){for(Network n:cm.getAllNetworks()){NetworkCapabilities caps=cm.getNetworkCapabilities(n);if(caps!=null&&caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN))return n;}return null;}
     private void active(){assertTrue("VPN stopped accidentally",ShieldVpnService.running);assertNotNull(vpn());}
     private void blocked()throws Exception {
@@ -41,10 +41,16 @@ public class AndroidAutoDeviceTest {
     private View find(View v,String text){if(v instanceof Button&&((Button)v).getText().toString().equals(text))return v;if(v instanceof ViewGroup){for(int i=0;i<((ViewGroup)v).getChildCount();i++){View result=find(((ViewGroup)v).getChildAt(i),text);if(result!=null)return result;}}return null;}
     private EditText input(View v){if(v instanceof EditText)return (EditText)v;if(v instanceof ViewGroup){for(int i=0;i<((ViewGroup)v).getChildCount();i++){EditText r=input(((ViewGroup)v).getChildAt(i));if(r!=null)return r;}}return null;}
     private AlertDialog dialog()throws Exception{Field f=AndroidAutoSettingsActivity.class.getDeclaredField("dialog");f.setAccessible(true);return (AlertDialog)f.get(screen);}
+    private void waitVerification(AlertDialog d) {
+        long until=SystemClock.elapsedRealtime()+60000;
+        while(SystemClock.elapsedRealtime()<until){AtomicReference<Boolean> ready=new AtomicReference<>();ui(()->ready.set(d.isShowing()&&d.getButton(-1).isEnabled()));if(ready.get())return;SystemClock.sleep(100);}
+        fail("Credential verifier did not finish");
+    }
     private void open(){screen=inst.startActivitySync(new Intent(c,AndroidAutoSettingsActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();}
     private void change(){ui(()->{View b=find(screen.getWindow().getDecorView(),"Modifica compatibilità");assertNotNull(b);b.performClick();});}
     @Test public void missingOrUntrustedHostAndForgedConnectionRetainFilter()throws Exception{
         boolean trusted=AndroidAutoCompatibilityManager.trustedHost(c);
+        if("true".equals(InstrumentationRegistry.getArguments().getString("expectAbsent")))assertFalse("Uninstalled host must not be trusted",trusted);
         if(!trusted)assertTrue(AndroidAutoCompatibilityManager.requestedExclusions(c).isEmpty());
         c.sendBroadcast(new Intent("androidx.car.app.connection.action.CAR_CONNECTION_UPDATED").putExtra("CarConnectionState",2));
         SystemClock.sleep(1500);assertFalse("Broadcast must not manufacture projection",AndroidAutoCompatibilityManager.projectionConnected);active();blocked();
@@ -58,13 +64,17 @@ public class AndroidAutoDeviceTest {
         if(BuildConfig.STRONG)new Guardian(c).setup(secret.toCharArray());
         else {Class<?> crypto=Class.forName("it.gameshield.NormalPinCrypto");String hash=(String)crypto.getDeclaredMethod("create",char[].class).invoke(null,(Object)secret.toCharArray());c.getSharedPreferences("normal_disable_pin",0).edit().putString("hash",hash).commit();}
         boolean original=AndroidAutoCompatibilityManager.enabled(c);open();change();AlertDialog auth=dialog();assertTrue(auth.isShowing());
-        ui(()->{input(auth.getWindow().getDecorView()).setText("wrong000");auth.getButton(-1).performClick();});SystemClock.sleep(2500);
+        ui(()->{input(auth.getWindow().getDecorView()).setText("wrong000");auth.getButton(-1).performClick();});waitVerification(auth);
         assertSame(auth,dialog());assertTrue(auth.isShowing());assertEquals(original,AndroidAutoCompatibilityManager.enabled(c));active();blocked();
         ui(()->{input(auth.getWindow().getDecorView()).setText(secret);auth.getButton(-1).performClick();});
-        long until=SystemClock.elapsedRealtime()+15000;while(dialog()==auth&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
+        long until=SystemClock.elapsedRealtime()+60000;while(dialog()==auth&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
         AlertDialog finalConfirmation=dialog();assertNotSame(auth,finalConfirmation);ui(()->finalConfirmation.getButton(-2).performClick());assertEquals(original,AndroidAutoCompatibilityManager.enabled(c));active();
-        change();AlertDialog again=dialog();ui(()->{input(again.getWindow().getDecorView()).setText(secret);again.getButton(-1).performClick();});until=SystemClock.elapsedRealtime()+15000;while(dialog()==again&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
+        change();AlertDialog again=dialog();ui(()->{input(again.getWindow().getDecorView()).setText(secret);again.getButton(-1).performClick();});until=SystemClock.elapsedRealtime()+60000;while(dialog()==again&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
         AlertDialog accepted=dialog();assertNotSame(again,accepted);ui(()->accepted.getButton(-1).performClick());SystemClock.sleep(2500);
+        long routingDeadline=SystemClock.elapsedRealtime()+15000;
+        boolean expectedRouting=!original&&AndroidAutoCompatibilityManager.trustedHost(c);
+        while(AndroidAutoCompatibilityManager.routingApplied!=expectedRouting&&SystemClock.elapsedRealtime()<routingDeadline)SystemClock.sleep(100);
+        assertEquals(expectedRouting,AndroidAutoCompatibilityManager.routingApplied);
         assertEquals(!original,AndroidAutoCompatibilityManager.enabled(c));active();blocked();
     }
 }

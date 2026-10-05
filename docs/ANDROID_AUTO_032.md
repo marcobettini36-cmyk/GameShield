@@ -69,7 +69,9 @@ Test JVM aggiunti: UID isolato, produzione vs firma falsa/debug,
 stato projection autenticato, nessuna esclusione GMS/browser.
 Test strumentali aggiunti: falso broadcast/host assente, ricreazione Activity,
 PIN/custode errato e corretto, annullamento/conferma impostazione, VPN e
-risposta DNS BLOCK mantenute. Eseguiti tramite GitHub Actions insieme ai
+risposta DNS BLOCK mantenute. Un passaggio dedicato rimuove Android Auto
+solo dall’utente dell’emulatore e verifica anche il caso realmente assente,
+poi ripristina il pacchetto prima dei test browser. Eseguiti tramite GitHub Actions insieme ai
 test esistenti di traffico reale, Chrome, Play Store e disattivazione Normal,
 con Private DNS Off/Automatico su emulatore Android 35.
 Gli esiti effettivi e gli APK sono registrati nel report consegnato.
