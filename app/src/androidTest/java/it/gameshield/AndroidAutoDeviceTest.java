@@ -76,5 +76,8 @@ public class AndroidAutoDeviceTest {
         while(AndroidAutoCompatibilityManager.routingApplied!=expectedRouting&&SystemClock.elapsedRealtime()<routingDeadline)SystemClock.sleep(100);
         assertEquals(expectedRouting,AndroidAutoCompatibilityManager.routingApplied);
         assertEquals(!original,AndroidAutoCompatibilityManager.enabled(c));active();blocked();
+        stop();c.startForegroundService(new Intent(c,ShieldVpnService.class).setAction("RECONFIGURE_AUTO"));SystemClock.sleep(2500);
+        assertFalse("Late configuration must not restart a voluntarily stopped VPN",ShieldVpnService.running);assertNull(vpn());
+        assertFalse(c.getSharedPreferences("shield",0).getBoolean("wanted",true));
     }
 }

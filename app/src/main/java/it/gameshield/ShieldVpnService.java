@@ -49,6 +49,10 @@ public final class ShieldVpnService extends VpnService {
             deactivate();
             getSharedPreferences("shield",0).edit().putBoolean("wanted",false).apply(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY;
         }
+        // A configuration message is not consent to start protection, including after STOP.
+        if (intent != null && "RECONFIGURE_AUTO".equals(intent.getAction()) && !active) {
+            stopSelf(startId); return START_NOT_STICKY;
+        }
         foreground("Avvio della protezione…");
         if (active) {
             if (BuildConfig.DEBUG && intent != null && "TEST_BREAK_PROXY".equals(intent.getAction())) {

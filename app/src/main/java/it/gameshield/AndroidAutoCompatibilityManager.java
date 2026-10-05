@@ -40,7 +40,7 @@ final class AndroidAutoCompatibilityManager implements AutoCloseable {
     }
     static Set<String> requestedExclusions(Context c){return AndroidAutoPolicy.exclusions(enabled(c),trustedHost(c));}
     void start(){
-        IntentFilter f=new IntentFilter();f.addAction(Intent.ACTION_PACKAGE_ADDED);f.addAction(Intent.ACTION_PACKAGE_REMOVED);f.addAction(Intent.ACTION_PACKAGE_REPLACED);f.addDataScheme("package");
+        IntentFilter f=new IntentFilter();f.addAction(Intent.ACTION_PACKAGE_ADDED);f.addAction(Intent.ACTION_PACKAGE_REMOVED);f.addAction(Intent.ACTION_PACKAGE_REPLACED);f.addAction(Intent.ACTION_PACKAGE_CHANGED);f.addDataScheme("package");
         if(Build.VERSION.SDK_INT>=33)context.registerReceiver(packages,f,Context.RECEIVER_NOT_EXPORTED);else context.registerReceiver(packages,f);
         projectionConnected=false;attach();
     }
