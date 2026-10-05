@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Dedicated Android emulator only. Exercise real TUN with Private DNS Off/Automatic."""
 import pathlib, subprocess, sys, time, xml.etree.ElementTree as ET
+from vpn_diagnostics import has_vpn_agent
 apks = pathlib.Path(sys.argv[1])
 reports = pathlib.Path('device-reports'); reports.mkdir(exist_ok=True)
 peer = subprocess.Popen([sys.executable, 'scripts/transport_peer.py'])
@@ -95,9 +96,21 @@ for edition in editions:
     if 'off' in modes:
         # BootReceiver / always-on acceptance on a disposable emulator, never a user device.
         owner = edition == 'strong'
+        owner_provisioned = False
         try:
             if owner:
-                provision = adb('shell', 'dpm', 'set-device-owner', package + '/it.gameshield.AdminReceiver')
+                # Cold Google Play boot may still be initializing account authenticators.
+                # Wait for that setup; never remove accounts or weaken owner requirements.
+                provision_deadline = time.monotonic() + 180
+                while True:
+                    try:
+                        provision = adb('shell', 'dpm', 'set-device-owner', package + '/it.gameshield.AdminReceiver')
+                        owner_provisioned = True
+                        break
+                    except RuntimeError as pending:
+                        if 'accounts on the device' not in str(pending) or time.monotonic() >= provision_deadline: raise
+                        print('Waiting for disposable emulator account setup before owner provisioning', flush=True)
+                        time.sleep(10)
                 (reports / 'strong-owner-provision.txt').write_text(provision)
                 arm_class = 'it.gameshield.AndroidAutoOwnerDeviceTest#lockdownExceptionRemainsNarrowAndArmsReboot'
                 arm_args = []
@@ -129,7 +142,8 @@ for edition in editions:
                     nets = adb('shell', 'dumpsys', 'connectivity')
                     # LISTEN requests also contain "Transports: VPN" before any VPN exists.
                     # Require an actual NetworkAgent and stable fresh readiness after startup.
-                    vpn_agent = any('NetworkAgentInfo{network{' in line and 'Transports: VPN' in line for line in nets.splitlines())
+                    vpn_agent = has_vpn_agent(nets)
+                    (reports / f'{edition}-reboot-last-network.txt').write_text(nets)
                     ready_samples = ready_samples + 1 if flags.get('wanted') == 'true' and flags.get('connectivityOk') == 'true' and vpn_agent else 0
                     if ready_samples >= 3:
                         (reports / f'{edition}-reboot-network.txt').write_text(nets)
@@ -141,7 +155,7 @@ for edition in editions:
             else: raise RuntimeError('Protection/self-test not restored after actual reboot')
         finally:
             (reports / f'{edition}-reboot-logcat.txt').write_text(adb('logcat', '-d', '-s', 'AndroidAuto:I', 'AndroidAutoOwnerTest:I', 'GameShieldVpn:I', 'GameShieldConnectivity:I', 'AndroidRuntime:E', '*:S'))
-            if owner:
+            if owner_provisioned:
                 cleanup = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
                     'it.gameshield.AndroidAutoOwnerDeviceTest#custodianCleanup',
                     package + '.test/androidx.test.runner.AndroidJUnitRunner', timeout=120)
