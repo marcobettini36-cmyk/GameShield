@@ -1,0 +1,9 @@
+AndroidX Car App 1.7.0 and AndroidX runtime dependencies
+Copyright The Android Open Source Project.
+Source: https://github.com/androidx/androidx
+Licensed under the Apache License, Version 2.0. See AndroidX-Apache-2.0.txt.
+
+Kotlin runtime dependencies
+Copyright JetBrains and Kotlin contributors.
+Source: https://github.com/JetBrains/kotlin
+Licensed under the Apache License, Version 2.0.
