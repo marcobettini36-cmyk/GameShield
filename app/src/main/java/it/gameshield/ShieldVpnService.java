@@ -51,6 +51,9 @@ public final class ShieldVpnService extends VpnService {
         }
         // A configuration message is not consent to start protection, including after STOP.
         if (intent != null && "RECONFIGURE_AUTO".equals(intent.getAction()) && !active) {
+            // Complete the foreground-service contract even when a delayed update is rejected.
+            foreground("Aggiornamento configurazione…");
+            stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf(startId); return START_NOT_STICKY;
         }
         foreground("Avvio della protezione…");
