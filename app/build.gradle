@@ -61,9 +61,19 @@ if (System.getProperty('os.name').toLowerCase().contains('windows')) {
         }
     }
 }
+def normalPlayRelease = project.findProperty('normalPlayRelease') == 'true'
+if (normalPlayRelease && gradle.startParameter.taskNames.any { it.toLowerCase().contains('strong') })
+    throw new GradleException('Normal Play packaging must not build Strong')
+def normalCode = (project.findProperty('normalVersionCode') ?: '6').toInteger()
+if (normalCode <= 5) throw new GradleException('Normal versionCode must exceed previous code 5')
+def uploadProperties = new Properties()
+def uploadFile = rootProject.file('.local-signing/release.properties')
+if (uploadFile.isFile()) uploadFile.withInputStream { uploadProperties.load(it) }
+def uploadValue = { name, environment -> uploadProperties.getProperty(name) ?: System.getenv(environment) }
+def uploadStore = uploadValue('storeFile', 'GAMESHIELD_UPLOAD_KEYSTORE')
 android {
     namespace 'it.gameshield'
-    compileSdk 35
+    compileSdk (normalPlayRelease ? 36 : 35)
     ndkVersion '28.2.13676358'
     defaultConfig {
         applicationId 'it.gameshield'
@@ -77,7 +87,7 @@ android {
     }
     flavorDimensions += 'protection'
     productFlavors {
-        normal { dimension 'protection'; buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
+        normal { dimension 'protection'; versionCode normalCode; targetSdk (normalPlayRelease ? 36 : 35); buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
         strong { dimension 'protection'; minSdk 30; applicationIdSuffix '.strong'; buildConfigField 'boolean', 'STRONG', 'true'; resValue 'string', 'app_name', 'GameShield Strong' }
     }
     buildFeatures { buildConfig true }
@@ -86,7 +96,24 @@ android {
     }
     externalNativeBuild { ndkBuild { path file('../native/Android.mk') } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
-    buildTypes { release { minifyEnabled false } }
+    signingConfigs {
+        if (uploadStore) {
+            upload {
+                storeFile rootProject.file(uploadStore)
+                storePassword uploadValue('storePassword', 'GAMESHIELD_UPLOAD_STORE_PASSWORD')
+                keyAlias uploadValue('keyAlias', 'GAMESHIELD_UPLOAD_ALIAS')
+                keyPassword uploadValue('keyPassword', 'GAMESHIELD_UPLOAD_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes { release {
+        minifyEnabled normalPlayRelease
+        shrinkResources normalPlayRelease
+        if (normalPlayRelease) {
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'normal-release.pro'
+            if (uploadStore) signingConfig signingConfigs.upload
+        }
+    } }
     lint { abortOnError true }
     testOptions { unitTests.all { systemProperty 'gameshield.assets', file('src/main/assets').absolutePath } }
 }

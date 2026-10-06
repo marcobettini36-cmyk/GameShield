@@ -11,7 +11,16 @@ public final class StrongPolicy {
     private final DevicePolicyManager manager;
     private final ComponentName admin;
     public StrongPolicy(Context c) {
-        context = c; manager = c.getSystemService(DevicePolicyManager.class); admin = new ComponentName(c, AdminReceiver.class);
+        context = c;
+        // Normal never needs an administrator, including during shared status checks.
+        // A compile-time flavor guard also removes the admin class from its bundle.
+        if (BuildConfig.STRONG) {
+            manager = c.getSystemService(DevicePolicyManager.class);
+            admin = new ComponentName(c, AdminReceiver.class);
+        } else {
+            manager = null;
+            admin = null;
+        }
     }
     public boolean owner() { return BuildConfig.STRONG && manager.isDeviceOwnerApp(context.getPackageName()); }
     public boolean locked() { return owner() && manager.isUninstallBlocked(admin, context.getPackageName()); }
