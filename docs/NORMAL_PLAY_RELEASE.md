@@ -7,12 +7,14 @@ Normal's manifest removes the shared Device Admin receiver. JNI entry points
 remain protected from renaming. The VPN implementation is unchanged.
 
 ```powershell
-./gradlew.bat -PnormalPlayRelease=true -PnormalVersionCode=6 clean testNormalDebugUnitTest lintNormalRelease bundleNormalRelease
+./gradlew.bat -PnormalPlayRelease=true -PnormalVersionCode=7 clean testNormalReleaseUnitTest lintNormalRelease bundleNormalRelease
 ```
 
 The output is `app/build/outputs/bundle/normalRelease/app-normal-release.aab`.
-Normal retains versionName `0.3.2`. Its new default versionCode is `6`, above the
-previous repository code `5`. Before upload, check Play Console's highest code
+Normal uses versionName `0.4.0`. Its new default versionCode is `7`, above the
+previous repository code `6`. The Play profile excludes automatic SMS/SEND_SMS;
+the debug APK offers that feature for direct distribution. Normal's voluntary
+administrator is separate from Strong's Device Owner policies. Before upload, check Play Console's highest code
 and override `normalVersionCode` with a larger number when required.
 
 ## Existing upload key only

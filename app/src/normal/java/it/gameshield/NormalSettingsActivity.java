@@ -18,8 +18,9 @@ public final class NormalSettingsActivity extends NormalScreen {
         label("Il PIN per disattivazione è facoltativo. Non impedisce la disinstallazione né l’accesso alle impostazioni Android. Se lo dimentichi, puoi rimuovere la VPN dalle impostazioni Android o disinstallare GameShield.",15);
         button("Imposta / modifica PIN",()->manage(false));button("Rimuovi PIN",()->manage(true));
         button("Compatibilità Android Auto",()->startActivity(new Intent(this,AndroidAutoSettingsActivity.class)));
+        button("Protezione avanzata Normal / persona fidata",()->startActivity(new Intent(this,NormalResilienceActivity.class)));
         label("Protezione sempre attiva",21);
-        label("Android permette di scegliere una VPN sempre attiva nelle impostazioni, se l’app la supporta. Questa versione Normal non la supporta: GameShield non cambia questa impostazione. Puoi aprire la pagina VPN e gestire la protezione direttamente da Android.",15);
+        label("Normal supporta la VPN sempre attiva. Nelle impostazioni Android apri GameShield e scegli 'VPN sempre attiva' e, se desideri, 'Blocca connessioni senza VPN'. Solo tu puoi attivarle. Il blocco senza VPN può interrompere Internet se il filtro non parte: in emergenza puoi disattivarlo dalle impostazioni Android.",15);
         button("Apri impostazioni VPN Android",()->{try{startActivity(new Intent(Settings.ACTION_VPN_SETTINGS));}catch(ActivityNotFoundException e){message("Pagina VPN non disponibile su questo dispositivo");}});
         button("Torna indietro",this::finish);refresh();
     }

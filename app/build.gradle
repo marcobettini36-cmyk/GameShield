@@ -64,7 +64,8 @@ if (System.getProperty('os.name').toLowerCase().contains('windows')) {
 def normalPlayRelease = project.findProperty('normalPlayRelease') == 'true'
 if (normalPlayRelease && gradle.startParameter.taskNames.any { it.toLowerCase().contains('strong') })
     throw new GradleException('Normal Play packaging must not build Strong')
-def normalCode = (project.findProperty('normalVersionCode') ?: '6').toInteger()
+def normalAutomaticSms = !normalPlayRelease && project.findProperty('normalAutomaticSms') != 'false'
+def normalCode = (project.findProperty('normalVersionCode') ?: '7').toInteger()
 if (normalCode <= 5) throw new GradleException('Normal versionCode must exceed previous code 5')
 def uploadProperties = new Properties()
 def uploadFile = rootProject.file('.local-signing/release.properties')
@@ -87,7 +88,7 @@ android {
     }
     flavorDimensions += 'protection'
     productFlavors {
-        normal { dimension 'protection'; versionCode normalCode; targetSdk (normalPlayRelease ? 36 : 35); buildConfigField 'boolean', 'STRONG', 'false'; resValue 'string', 'app_name', 'GameShield' }
+        normal { dimension 'protection'; versionCode normalCode; versionName '0.4.0'; targetSdk (normalPlayRelease ? 36 : 35); buildConfigField 'boolean', 'STRONG', 'false'; buildConfigField 'boolean', 'AUTOMATIC_SMS_ENABLED', normalAutomaticSms.toString(); manifestPlaceholders = [normalSmsNode: normalAutomaticSms ? 'merge' : 'remove']; resValue 'string', 'app_name', 'GameShield' }
         strong { dimension 'protection'; minSdk 30; applicationIdSuffix '.strong'; buildConfigField 'boolean', 'STRONG', 'true'; resValue 'string', 'app_name', 'GameShield Strong' }
     }
     buildFeatures { buildConfig true }
@@ -116,6 +117,23 @@ android {
     } }
     lint { abortOnError true }
     testOptions { unitTests.all { systemProperty 'gameshield.assets', file('src/main/assets').absolutePath } }
+}
+// Render only the Normal overlay before tools:node is parsed by the merger.
+def normalManifestOutput = layout.buildDirectory.file('generated/normalDistribution/AndroidManifest.xml')
+def normalManifestTask = tasks.register('generateNormalDistributionManifest') {
+    inputs.file(file('src/normal/AndroidManifest.xml'))
+    inputs.property('automaticSms', normalAutomaticSms)
+    outputs.file(normalManifestOutput)
+    doLast {
+        def destination = normalManifestOutput.get().asFile
+        destination.parentFile.mkdirs()
+        destination.setText(file('src/normal/AndroidManifest.xml').getText('UTF-8')
+            .replace('${normalSmsNode}', normalAutomaticSms ? 'merge' : 'remove'), 'UTF-8')
+    }
+}
+android.sourceSets.normal.manifest.srcFile(normalManifestOutput.get().asFile)
+tasks.configureEach { task ->
+    if (task.name.startsWith('processNormal') && task.name.endsWith('Manifest')) task.dependsOn(normalManifestTask)
 }
 dependencies {
     implementation "androidx.car.app:app:1.7.0"

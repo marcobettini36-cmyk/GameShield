@@ -13,7 +13,7 @@ import static org.junit.Assert.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.lang.reflect.Field;
 import javax.net.ssl.HttpsURLConnection;
-/** Real UI, actual 60-second waits, actual running TUN. No deadline injection. */
+/** Real UI/TUN and actual 60-second waits after preparing the completed 24h checkpoint. */
 public class NormalDisableDeviceTest {
     private final Instrumentation inst=InstrumentationRegistry.getInstrumentation();
     private Context c;
@@ -21,14 +21,14 @@ public class NormalDisableDeviceTest {
     private Activity screen;
     @Before public void before()throws Exception{
         c=inst.getTargetContext();cm=c.getSystemService(ConnectivityManager.class);
-        stop();c.getSharedPreferences("normal_disable_pin",0).edit().clear().commit();
+        stop();c.getSharedPreferences("normal_disable_pin",0).edit().clear().commit();NormalSafety.prefs(c).edit().clear().commit();
         assertNull(VpnService.prepare(c));c.startForegroundService(new Intent(c,ShieldVpnService.class));
         long until=SystemClock.elapsedRealtime()+180000;
         while((!ShieldVpnService.running||vpn()==null)&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(200);
         assertTrue(ShieldVpnService.running);assertNotNull(vpn());
         SystemClock.sleep(2500);https();
     }
-    @After public void after()throws Exception{if(screen!=null)ui(()->screen.finish());stop();c.getSharedPreferences("normal_disable_pin",0).edit().clear().commit();}
+    @After public void after()throws Exception{if(screen!=null)ui(()->screen.finish());stop();c.getSharedPreferences("normal_disable_pin",0).edit().clear().commit();NormalSafety.prefs(c).edit().clear().commit();}
     private void stop(){
         if(vpn()!=null || ShieldVpnService.running)c.startService(new Intent(c,ShieldVpnService.class).setAction("STOP"));
         else c.stopService(new Intent(c,ShieldVpnService.class));
@@ -39,7 +39,8 @@ public class NormalDisableDeviceTest {
     private void active(){assertTrue("Protection accidentally stopped",ShieldVpnService.running);assertNotNull(vpn());}
     private void https()throws Exception{Network n=vpn();assertNotNull(n);HttpsURLConnection h=(HttpsURLConnection)n.openConnection(new java.net.URL("https://www.google.it/"));h.setConnectTimeout(10000);h.setReadTimeout(10000);try{assertTrue(h.getResponseCode()>0);}finally{h.disconnect();}}
     private void ui(Runnable r){inst.runOnMainSync(r);inst.waitForIdleSync();}
-    private void open(){screen=inst.startActivitySync(new Intent(c,NormalDisableActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();active();}
+    private void completedDay(){NormalSafety.prefs(c).edit().putLong("releaseWall",System.currentTimeMillis()-NormalSafety.DAY).putLong("releaseElapsed",0).putInt("releaseBoot",NormalSafety.boot(c)-1).commit();}
+    private void open(){completedDay();screen=inst.startActivitySync(new Intent(c,NormalDisableActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();active();}
     private Object field(String name)throws Exception{Field f=NormalDisableActivity.class.getDeclaredField(name);f.setAccessible(true);return f.get(screen);}
     private DisableSession session()throws Exception{return (DisableSession)field("session");}
     private void click(String name){AtomicReference<Button>b=new AtomicReference<>();ui(()->b.set(find(screen.getWindow().getDecorView(),name)));assertNotNull(name,b.get());ui(()->b.get().performClick());}
@@ -61,7 +62,7 @@ public class NormalDisableDeviceTest {
     }
     @Test public void countdownCancellationRecreationAndFinalConfirmation()throws Exception{
         screen=inst.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();
-        Activity main=screen;click("Disattiva protezione");awaitScreen(main);DisableSession first=session();assertTrue(first.remaining(SystemClock.elapsedRealtime())>=59);
+        Activity main=screen;completedDay();click("Disattiva protezione");awaitScreen(main);DisableSession first=session();assertTrue(first.remaining(SystemClock.elapsedRealtime())>=59);
         Button proceed=(Button)field("proceed");assertFalse(proceed.isEnabled());click("Continua");active();
         click("Annulla e mantieni protezione");active();open();assertNotEquals(first.code,session().code);
         long deadline=session().deadline;String code=session().code;

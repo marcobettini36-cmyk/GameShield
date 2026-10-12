@@ -1,0 +1,71 @@
+name: Normal resilience and Play bundle
+on:
+  push:
+    paths:
+      - 'app/src/normal/**'
+      - 'app/src/testNormal/**'
+      - 'app/src/androidTestNormal/**'
+      - 'app/build.gradle'
+      - 'scripts/normal_resilience_device.py'
+      - '.github/workflows/normal-resilience.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  normal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Toolchain
+        run: sdkmanager 'platforms;android-35' 'platforms;android-36' 'build-tools;35.0.0' 'ndk;28.2.13676358'
+      - name: Normal APK and regression tests
+        run: |
+          chmod +x gradlew
+          python3 -m unittest discover -s scripts -p 'test_*.py'
+          ./gradlew --no-daemon --max-workers=2 testNormalDebugUnitTest testStrongDebugUnitTest lintNormalDebug assembleNormalDebug assembleNormalDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Normal-SMS-debug-and-device-tests
+          path: |
+            app/build/outputs/apk/normal/debug/*.apk
+            app/build/outputs/apk/androidTest/normal/debug/*.apk
+      - name: Normal Play bundle without restricted SMS permission
+        run: ./gradlew --no-daemon --max-workers=2 -PnormalPlayRelease=true testNormalReleaseUnitTest lintNormalRelease bundleNormalRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Normal-Play-release-unsigned
+          path: app/build/outputs/bundle/normalRelease/*.aab
+          if-no-files-found: error
+      - name: KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Actual Normal tunnel and release flow on Android 35
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: python3 scripts/normal_resilience_device.py app/build/outputs/apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Normal-resilience-validation
+          path: |
+            normal-device-reports/
+            app/build/reports/
