@@ -14,7 +14,7 @@ class StrongIsolationTest(unittest.TestCase):
         for directory in ('app/src/main/java', 'app/src/main/res', 'app/src/strong', 'native-patches'):
             paths.extend(p for p in (ROOT / directory).rglob('*') if p.is_file())
         paths.append(ROOT / 'app/src/main/AndroidManifest.xml')
-        actual = {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+        actual = {p.relative_to(ROOT).as_posix(): hashlib.sha256(p.read_bytes().replace(b'\r\n', b'\n')).hexdigest() for p in paths}
         self.assertEqual(expected, actual, 'This Normal change must not alter shared/Strong sources')
 
     def test_strong_flavor_identity_unchanged(self):

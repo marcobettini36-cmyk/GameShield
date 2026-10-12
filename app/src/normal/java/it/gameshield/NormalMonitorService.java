@@ -10,7 +10,7 @@ public final class NormalMonitorService extends VpnService {
     private final Handler handler=new Handler(Looper.getMainLooper());
     private final Runnable tick=new Runnable(){public void run(){
         if(!NormalSafety.enabled(NormalMonitorService.this)){stopSelf();return;}
-        NormalSafety.check(NormalMonitorService.this);show();handler.postDelayed(this,15_000);
+        NormalSafety.check(NormalMonitorService.this);try{show();}catch(RuntimeException ignored){}handler.postDelayed(this,15_000);
     }};
     static Boolean alwaysOn(){try{return instance==null?null:instance.isAlwaysOn();}catch(RuntimeException e){return null;}}
     static Boolean lockdown(){try{return instance==null?null:instance.isLockdownEnabled();}catch(RuntimeException e){return null;}}

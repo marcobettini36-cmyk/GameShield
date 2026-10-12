@@ -6,6 +6,9 @@ import android.os.SystemClock;
 final class NormalJobs {
     static final int PERIODIC=47101,EVENT=47102;
     static void schedule(Context c) {
+        try{scheduleInternal(c);}catch(RuntimeException e){try{NormalSafety.prefs(c).edit().putString("monitorIssue","Android non ha accettato il lavoro in background: apri GameShield.").apply();}catch(RuntimeException ignored){}}
+    }
+    private static void scheduleInternal(Context c) {
         JobScheduler js=c.getSystemService(JobScheduler.class);
         if(!NormalSafety.enabled(c)){js.cancel(PERIODIC);js.cancel(EVENT);return;}
         ComponentName component=new ComponentName(c,NormalCheckJob.class);

@@ -27,12 +27,14 @@ final class NormalSafety {
         return false;
     }
     static boolean physicalAvailable(Context c) {
+        try {
         ConnectivityManager cm=c.getSystemService(ConnectivityManager.class);
         for(Network n:cm.getAllNetworks()) {
             NetworkCapabilities caps=cm.getNetworkCapabilities(n);
             if(caps!=null && !caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
                 && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED))return true;
         }
+        }catch(RuntimeException ignored){}
         return false;
     }
     static NormalDeadline deadline(android.content.SharedPreferences p,String key,long duration) {
@@ -56,6 +58,9 @@ final class NormalSafety {
     }
     static boolean enabled(Context c){return prefs(c).getBoolean("recovery",false) || (BuildConfig.AUTOMATIC_SMS_ENABLED && prefs(c).getBoolean("smsConsent",false));}
     static void check(Context c) {
+        try{checkInternal(c);}catch(RuntimeException e){try{prefs(c).edit().putString("monitorIssue","Verifica della supervisione non completata; il motore VPN non è stato arrestato.").apply();}catch(RuntimeException ignored){}}
+    }
+    private static void checkInternal(Context c) {
         c=c.getApplicationContext();
         synchronized(LOCK) {
             boolean active=protectedNow(c);NormalEpisode e=episode(c);

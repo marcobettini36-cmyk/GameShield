@@ -18,6 +18,9 @@ final class NormalSms {
         send(c,false);
     }
     static boolean send(Context c,boolean test) {
+        try{return sendInternal(c,test);}catch(RuntimeException e){return issue(c,test,"Servizio SMS non disponibile. Nessun reinvio di invii già prenotati.",!test&&!NormalSafety.episode(c).claimed);}
+    }
+    private static boolean sendInternal(Context c,boolean test) {
         synchronized(NormalSafety.LOCK) {
             android.content.SharedPreferences p=NormalSafety.prefs(c);String key=test?"test":"alert";
             if(!BuildConfig.AUTOMATIC_SMS_ENABLED || !p.getBoolean("smsConsent",false))return issue(c,test,"SMS automatici non autorizzati.",false);
