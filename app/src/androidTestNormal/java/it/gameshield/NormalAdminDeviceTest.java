@@ -15,7 +15,12 @@ public class NormalAdminDeviceTest {
         Assume.assumeTrue("Legacy administrator unavailable on this emulator",manager!=null && manager.isAdminActive(admin));
         assertFalse(manager.isDeviceOwnerApp(c.getPackageName()));assertFalse(manager.isProfileOwnerApp(c.getPackageName()));
         ResolveInfo info=new ResolveInfo();info.activityInfo=c.getPackageManager().getReceiverInfo(admin,PackageManager.GET_META_DATA);
-        assertTrue(new DeviceAdminInfo(c,info).getUsedPolicies().isEmpty());
+        DeviceAdminInfo details=new DeviceAdminInfo(c,info);
+        for(int policy:new int[]{DeviceAdminInfo.USES_POLICY_WIPE_DATA,DeviceAdminInfo.USES_POLICY_FORCE_LOCK,
+            DeviceAdminInfo.USES_POLICY_RESET_PASSWORD,DeviceAdminInfo.USES_POLICY_LIMIT_PASSWORD,
+            DeviceAdminInfo.USES_POLICY_WATCH_LOGIN,DeviceAdminInfo.USES_POLICY_EXPIRE_PASSWORD,
+            DeviceAdminInfo.USES_POLICY_DISABLE_CAMERA,DeviceAdminInfo.USES_POLICY_DISABLE_KEYGUARD_FEATURES,
+            DeviceAdminInfo.USES_ENCRYPTED_STORAGE})assertFalse(details.usesPolicy(policy));
         NormalSafety.prefs(c).edit().putBoolean("recovery",false).putBoolean("smsConsent",false).commit();
         assertTrue(NormalSafety.voluntaryStop(c));long until=SystemClock.elapsedRealtime()+15_000;
         while(manager.isAdminActive(admin) && SystemClock.elapsedRealtime()<until)SystemClock.sleep(100);
