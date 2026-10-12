@@ -50,6 +50,8 @@ public final class NormalDisableActivity extends NormalScreen {
         pin=field("PIN per disattivazione",true);pin.setVisibility(required?android.view.View.VISIBLE:android.view.View.GONE);
         if(required)label("Inserisci anche il tuo PIN. Se lo hai dimenticato, puoi sempre rimuovere la VPN dalle impostazioni Android o disinstallare l’app.",14);
         error=label("",15);proceed=button("Continua",this::verify);
+        // Never expose an enabled confirmation button before the first lifecycle tick.
+        code.setEnabled(false);pin.setEnabled(false);proceed.setEnabled(false);
         button("Annulla e mantieni protezione",this::cancel);
     }
     private void verify() {
@@ -90,7 +92,7 @@ public final class NormalDisableActivity extends NormalScreen {
     private void cancel(){NormalSafety.cancelRelease(this);close();}
     private void close(){interrupted=true;session.cancel();finish();}
     @Override public void onBackPressed(){close();}
-    @Override protected void onResume(){super.onResume();if(session!=null&&!interrupted)handler.post(tick);}
+    @Override protected void onResume(){super.onResume();handler.removeCallbacks(tick);if(session!=null&&!interrupted)tick.run();}
     @Override protected void onStop(){handler.removeCallbacks(tick);if(session!=null&&!isChangingConfigurations()){close();}super.onStop();}
     @Override protected void onSaveInstanceState(Bundle out){
         if(session!=null){out.putString("process",PROCESS);out.putLong("deadline",session.deadline);out.putString("code",session.code);out.putBoolean("interrupted",interrupted);}
