@@ -14,6 +14,7 @@ import java.util.Arrays;
 public final class NormalResilienceActivity extends NormalScreen {
     private TextView state;
     private long authorizedUntil;
+    private String authorizedHash;
     private boolean busy;
     private final Runnable refresh=new Runnable(){public void run(){state.setText(NormalSafety.status(NormalResilienceActivity.this));handler.postDelayed(this,1000);}};
     @Override public void onCreate(Bundle b) {
@@ -58,11 +59,11 @@ public final class NormalResilienceActivity extends NormalScreen {
     private void open(String action){try{startActivity(new Intent(action));}catch(ActivityNotFoundException e){message("Pagina non disponibile. Apri manualmente le impostazioni Android.");}}
     private void guard(Runnable action) {
         if(busy)return;String hash=NormalSafety.prefs(this).getString("trustedHash",null);
-        if(hash==null || SystemClock.elapsedRealtime()<authorizedUntil){action.run();return;}
+        if(hash==null || (SystemClock.elapsedRealtime()<authorizedUntil && java.util.Objects.equals(hash,authorizedHash))){action.run();return;}
         EditText input=secret("Codice persona fidata");
         new AlertDialog.Builder(this).setTitle("Verifica persona fidata").setView(input).setNegativeButton("Annulla",null).setPositiveButton("Verifica",(d,w)->{
             char[] code=input.getText().toString().toCharArray();input.setText("");busy=true;
-            worker.execute(()->{boolean ok=NormalTrusted.verify(this,code,hash);Arrays.fill(code,'\0');deliver(()->{busy=false;if(ok && java.util.Objects.equals(hash,NormalSafety.prefs(this).getString("trustedHash",null))){authorizedUntil=SystemClock.elapsedRealtime()+60_000;action.run();}else message("Codice errato o attesa di sicurezza attiva.");});});
+            worker.execute(()->{boolean ok=NormalTrusted.verify(this,code,hash);Arrays.fill(code,'\0');deliver(()->{busy=false;if(ok && java.util.Objects.equals(hash,NormalSafety.prefs(this).getString("trustedHash",null))){authorizedHash=hash;authorizedUntil=SystemClock.elapsedRealtime()+60_000;action.run();}else message("Codice errato o attesa di sicurezza attiva.");});});
         }).show();
     }
     private EditText secret(String hint){EditText e=new EditText(this);e.setHint(hint);e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_VARIATION_PASSWORD);e.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(12)});e.setSaveEnabled(false);e.setImportantForAutofill(android.view.View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS);e.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING|android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI);return e;}
@@ -108,5 +109,5 @@ public final class NormalResilienceActivity extends NormalScreen {
     }
     @Override public void onRequestPermissionsResult(int req,String[] p,int[] results){super.onRequestPermissionsResult(req,p,results);if(req==72){if(results.length>0 && results[0]==PackageManager.PERMISSION_GRANTED){NormalSafety.startMonitor(this);message("Consenso e permesso registrati. Conferma anche la SIM SMS predefinita.");}else{NormalSafety.prefs(this).edit().putBoolean("smsConsent",false).commit();message("Permesso negato: nessun SMS automatico.");}}}
     @Override protected void onResume(){super.onResume();handler.post(refresh);}
-    @Override protected void onStop(){handler.removeCallbacks(refresh);authorizedUntil=0;super.onStop();}
+    @Override protected void onStop(){handler.removeCallbacks(refresh);authorizedUntil=0;authorizedHash=null;super.onStop();}
 }
