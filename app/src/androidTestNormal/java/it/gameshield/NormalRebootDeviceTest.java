@@ -20,7 +20,8 @@ public class NormalRebootDeviceTest {
         assertNotEquals("Runner did not reboot Android",NormalSafety.prefs(c).getInt("testBootBefore",-1),NormalSafety.boot(c));
         assertEquals(NormalSafety.prefs(c).getLong("testAutonomyWall",-1),NormalSafety.prefs(c).getLong("autonomyWall",-2));
         assertTrue(NormalAutonomy.remaining(c)>6*NormalSafety.DAY);assertTrue(NormalContentService.consent(c));assertFalse(NormalSafety.granted(c));
-        System.out.println("POST-REBOOT VPN ACTUAL STATE: "+NormalSafety.protectedNow(c)+"; CONTENT SERVICE: "+NormalContentService.connected());
+        long until=SystemClock.elapsedRealtime()+60_000;while(!NormalSafety.protectedNow(c)&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(200);
+        Bundle evidence=new Bundle();evidence.putString("rebootProtectionState","VPN="+NormalSafety.protectedNow(c)+"; contenuti="+NormalContentService.connected());InstrumentationRegistry.getInstrumentation().sendStatus(2,evidence);
         // Persistence is guaranteed by storage; OEM background recovery is best effort.
         assertTrue(NormalSafety.grant(c));assertTrue(NormalSafety.voluntaryStop(c));assertEquals(0,NormalAutonomy.remaining(c));
     }
