@@ -14,7 +14,7 @@ final class NormalVisibleHost {
         int colon=authority.indexOf(':');if(start==0 && colon>=0 && !authority.substring(colon+1).matches("[0-9]+"))return null;
         try {
             URI u=new URI("https://"+authority);String host=u.getHost();
-            if(host==null){host=u.getRawAuthority();if(host==null)return null;int at=host.lastIndexOf('@');if(at>=0)host=host.substring(at+1);int colon=host.lastIndexOf(':');if(colon>=0&&host.substring(colon+1).matches("[0-9]+"))host=host.substring(0,colon);}
+            if(host==null){host=u.getRawAuthority();if(host==null)return null;int at=host.lastIndexOf('@');if(at>=0)host=host.substring(at+1);int rawColon=host.lastIndexOf(':');if(rawColon>=0&&host.substring(rawColon+1).matches("[0-9]+"))host=host.substring(0,rawColon);}
             return DomainRules.normalize(host);
         }catch(java.net.URISyntaxException e){return null;}
     }
