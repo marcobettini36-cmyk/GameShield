@@ -38,6 +38,21 @@ for name in ('NormalResilienceDeviceTest', 'NormalDisableDeviceTest', 'NormalLay
         raise RuntimeError(name+' did not pass')
 
 # The shell fixture is emulator-only. No Device Owner is ever provisioned.
+adb('shell', 'settings', 'put', 'secure', 'enabled_accessibility_services', 'null')
+adb('shell', 'settings', 'put', 'secure', 'accessibility_enabled', '0')
+try:
+    adb('shell', 'settings', 'put', 'global', 'private_dns_specifier', 'clean.dnsforge.de')
+    adb('shell', 'settings', 'put', 'global', 'private_dns_mode', 'hostname')
+    result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.NormalDnsProviderDeviceTest',
+                 'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner', timeout=180)
+    (out/'NormalDnsProviderDeviceTest.txt').write_text(result, encoding='utf-8')
+    print(result)
+    if 'FAILURES!!!' in result or 'OK (' not in result:
+        raise RuntimeError('Private DNS measurement failed')
+finally:
+    adb('shell', 'settings', 'put', 'global', 'private_dns_mode', 'opportunistic')
+    adb('shell', 'settings', 'delete', 'global', 'private_dns_specifier')
+
 activation = subprocess.run(['adb', '-s', serial, 'shell', 'dpm', 'set-active-admin',
                              'it.gameshield/it.gameshield.NormalAdminReceiver'], text=True, capture_output=True, timeout=30)
 (out/'NormalAdminActivation.txt').write_text(activation.stdout+activation.stderr, encoding='utf-8')

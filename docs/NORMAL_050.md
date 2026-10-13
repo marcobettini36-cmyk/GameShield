@@ -46,7 +46,7 @@ https://support.google.com/googleplay/android-developer/answer/18258653?hl=en
 `NormalContentService` opera sul servizio Accessibility Android, non crea TUN,
 non modifica routing/socket, non richiede overlay generale SYSTEM_ALERT_WINDOW.
 Eventi finestra/contenuto/testo debounced; niente polling di Usage Access.
-Catalogo esatto di quattro package regionali bet365, con URL Play verificati in
+Catalogo esatto di sei package bet365/Betfair/William Hill, con URL Play verificati in
 `src/normal/assets/gambling-apps.txt`. Non si bloccano nomi simili, categorie
 finanziarie, autenticatore bet365, banche o pagamenti. Aggiornare questo catalogo
 tramite una nuova versione dell'app; non viene scaricato codice/regole da terzi.
@@ -99,8 +99,12 @@ sono annotate come campione bloccante, non prova universale di classificazione.
 La rete/hostname devono restare uguali fino alla fine. Nessun HTTPS a un sito
 gambling. Un guasto/timeout è NON VERIFICATO, non protezione riuscita.
 
-Non è stato selezionato un provider gratuito stabile con copertura provata di
-tutta la blacklist. Mullvad, che documenta gambling nel DNS pubblico family,
+Nessun provider garantisce copertura provata di tutta la blacklist. Il wizard
+propone opzionalmente `clean.dnsforge.de`, gratuito senza account secondo il
+provider, con filtri gambling ma anche adulti/pubblicità/tracker/malware e SafeSearch.
+Consenso prima di copiare il solo hostname; nessuna configurazione silenziosa.
+Server in Germania/no logging sono dichiarazioni del provider, non audit.
+Mullvad, che documenta gambling nel DNS pubblico family,
 annuncia cessazione 2 novembre2026: non viene hardcoded o consigliato. Il wizard
 è utilizzabile con provider scelto dall'utente e fornisce una prova locale reale;
 non è una nuova blacklist remota gestita da GameShield. Liste/privacy/gratuità
@@ -109,6 +113,7 @@ DoH del browser, IP diretti e resolver autonomi possono bypassare il DNS.
 Una risposta NXDOMAIN per un dominio già inesistente non prova un filtro.
 
 https://mullvad.net/en/help/dns-over-https-and-dns-over-tls
+https://dnsforge.de/
 https://support.google.com/fi/answer/2819583?hl=en
 https://developer.android.com/reference/android/net/DnsResolver
 

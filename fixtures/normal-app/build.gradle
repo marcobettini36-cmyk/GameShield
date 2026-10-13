@@ -3,4 +3,5 @@ android {
     namespace 'it.gameshield.fixture'
     compileSdk 35
     defaultConfig { applicationId 'it.gameshield.fixture'; minSdk 29; targetSdk 35; versionCode 1; versionName '1.0' }
+    if (project.hasProperty('debugKeystorePath')) signingConfigs.debug.storeFile = rootProject.file(project.property('debugKeystorePath'))
 }

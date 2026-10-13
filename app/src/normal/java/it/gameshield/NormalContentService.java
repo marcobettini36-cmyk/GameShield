@@ -65,6 +65,7 @@ public final class NormalContentService extends AccessibilityService {
         if(!browser(p))return null;
         String[] ids=p.startsWith("com.sec.")?new String[]{p+":id/location_bar",p+":id/url_bar"}:new String[]{p+":id/url_bar"};
         for(String id:ids)for(AccessibilityNodeInfo control:node.findAccessibilityNodeInfosByViewId(id)){
+            if(!control.isVisibleToUser())continue;
             CharSequence text=control.getText();String host=NormalVisibleHost.parse(text==null?null:text.toString());
             if(host!=null&&store.rules().blocks(host))return "domain";
         }
