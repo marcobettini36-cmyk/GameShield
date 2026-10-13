@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import subprocess
 import sys
+import time
 
 serial = os.environ.get('ANDROID_SERIAL', 'emulator-5554')
 if not serial.startswith('emulator-'):
@@ -56,10 +57,38 @@ finally:
 activation = subprocess.run(['adb', '-s', serial, 'shell', 'dpm', 'set-active-admin',
                              'it.gameshield/it.gameshield.NormalAdminReceiver'], text=True, capture_output=True, timeout=30)
 (out/'NormalAdminActivation.txt').write_text(activation.stdout+activation.stderr, encoding='utf-8')
+if activation.returncode == 0:
+    attempt = adb('shell', 'pm', 'uninstall', 'it.gameshield')
+    (out/'UninstallWhileAdmin.txt').write_text(attempt, encoding='utf-8')
+    if 'DELETE_FAILED_DEVICE_POLICY_MANAGER' not in attempt:
+        raise RuntimeError('Expected Android administrator uninstall restriction: '+attempt)
 result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.NormalAdminDeviceTest',
              'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner')
 (out/'NormalAdminDeviceTest.txt').write_text(result, encoding='utf-8')
 print(result)
 if 'FAILURES!!!' in result or 'OK (' not in result:
     raise RuntimeError('Normal administrator release failed')
+
+def boot_test(method):
+    result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                 'it.gameshield.NormalRebootDeviceTest#'+method,
+                 'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner', timeout=1000)
+    (out/(method+'.txt')).write_text(result, encoding='utf-8')
+    print(result)
+    if 'FAILURES!!!' in result or 'OK (' not in result:
+        raise RuntimeError('Actual reboot phase failed: '+method)
+
+boot_test('prepareBootCommitment')
+adb('reboot')
+adb('wait-for-device', timeout=180)
+boot_deadline = time.monotonic()+180
+while adb('shell', 'getprop', 'sys.boot_completed').strip() != '1':
+    if time.monotonic()>boot_deadline:
+        raise RuntimeError('Emulator reboot timeout')
+    time.sleep(1)
+boot_test('verifyAfterActualReboot')
+removed = adb('shell', 'pm', 'uninstall', 'it.gameshield')
+(out/'UninstallAfterRelease.txt').write_text(removed, encoding='utf-8')
+if 'Success' not in removed:
+    raise RuntimeError('Normal must remain removable after administrator release')
 

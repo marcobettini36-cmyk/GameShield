@@ -50,8 +50,11 @@ public class NormalLayersDeviceTest {
             }
             RuleStore baseline=new RuleStore(c);
             for(String host:new String[]{"bet365.com","playzilla.com","excitewin.com"}){assertTrue(host,baseline.rules().blocks(host));boolean denied;try{denied=NormalDnsProbe.blocked(java.util.Arrays.asList(vpn.getAllByName(host)));}catch(java.net.UnknownHostException expected){denied=true;}assertTrue("Gambling DNS not blocked: "+host,denied);}
-            c.getSharedPreferences("shield",0).edit().putString("custom","example.org\n").commit();c.startService(new Intent(c,ShieldVpnService.class).setAction("RELOAD"));SystemClock.sleep(2000);
-            boolean denied;try{denied=NormalDnsProbe.blocked(java.util.Arrays.asList(vpn.getAllByName("example.org")));}catch(java.net.UnknownHostException expected){denied=true;}assertTrue("Manual rule not blocked",denied);
+            c.getSharedPreferences("shield",0).edit().putString("custom","example.org\n").commit();c.startService(new Intent(c,ShieldVpnService.class).setAction("RELOAD"));
+            long reloadUntil=SystemClock.elapsedRealtime()+60_000;
+            while(c.getSharedPreferences("shield",0).getInt("rules",0)<baseline.rules().size()+1 && SystemClock.elapsedRealtime()<reloadUntil)SystemClock.sleep(200);
+            assertTrue("Manual rule reload did not complete",c.getSharedPreferences("shield",0).getInt("rules",0)>=baseline.rules().size()+1);
+            assertTrue("Manual rule not blocked",NormalDnsProbe.blocked(NormalDnsProbe.resolve(vpn,"example.org")));
             assertTrue(NormalSafety.protectedNow(c));assertTrue(NormalDnsProbe.run(c,"bet365.com").contains("una VPN è attiva"));
         }finally{inst.runOnMainSync(main::finish);}
     }
