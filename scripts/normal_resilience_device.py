@@ -25,7 +25,11 @@ adb('shell', 'appops', 'set', 'it.gameshield', 'ACTIVATE_VPN', 'allow')
 sdk = int(adb('shell', 'getprop', 'ro.build.version.sdk').strip())
 if sdk >= 33:
     adb('shell', 'pm', 'grant', 'it.gameshield', 'android.permission.POST_NOTIFICATIONS')
-for name in ('NormalResilienceDeviceTest', 'NormalDisableDeviceTest'):
+fixture = Path('fixtures/normal-app/build/outputs/apk/debug/normal-app-debug.apk')
+if not fixture.exists():
+    raise RuntimeError('Build the disposable :normalFixture APK before running layer tests')
+adb('install', '-r', str(fixture))
+for name in ('NormalResilienceDeviceTest', 'NormalDisableDeviceTest', 'NormalLayersDeviceTest'):
     result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.'+name,
                  'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner', timeout=1000)
     (out/(name+'.txt')).write_text(result, encoding='utf-8')

@@ -21,7 +21,7 @@ public final class NormalDisableActivity extends NormalScreen {
         int left=session.remaining(SystemClock.elapsedRealtime());
         long wait=NormalSafety.releaseRemaining(NormalDisableActivity.this);
         long seconds=(wait+999)/1000;
-        countdown.setText(wait>0?"Attesa di 24 ore: "+(seconds/3600)+" h "+((seconds/60)%60)+" min "+(seconds%60)+" s":left>0?"Secondi rimanenti: "+left:"Attesa completata");
+        countdown.setText(wait>0?"Attesa interna / periodo autonomo: "+(seconds/3600)+" h "+((seconds/60)%60)+" min "+(seconds%60)+" s":left>0?"Secondi rimanenti: "+left:"Attesa completata");
         boolean ready=left==0 && wait==0;
         codeLabel.setText(ready?"Riscrivi questo codice: "+session.code:"Il codice sarà mostrato al termine dell'attesa.");
         code.setEnabled(ready&&!busy);pin.setEnabled(ready&&!busy);proceed.setEnabled(ready&&!busy);

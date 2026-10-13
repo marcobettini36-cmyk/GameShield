@@ -20,6 +20,7 @@ public final class NormalResilienceActivity extends NormalScreen {
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);layout("Protezione avanzata Normal");
         state=label("",17);
+        button("Protezione Autonoma / livelli indipendenti",()->startActivity(new Intent(this,NormalLayersActivity.class)));
         label("1. VPN sempre attiva e blocco senza VPN",21);
         label("Attiva prima la protezione dalla schermata principale. Apri VPN Android, premi l'ingranaggio accanto a GameShield, abilita 'VPN sempre attiva' e, se desideri, 'Blocca connessioni senza VPN'. Quest'ultima scelta può interrompere Internet in caso di guasto: il rilascio d'emergenza è sempre accessibile.",15);
         button("Configura VPN nelle impostazioni Android",()->new AlertDialog.Builder(this).setTitle("Scelta nelle impostazioni Android").setMessage("GameShield non attiva queste opzioni da solo. Il blocco senza VPN blocca Internet quando il filtro è fermo. Conserva le istruzioni di emergenza.")
@@ -58,6 +59,7 @@ public final class NormalResilienceActivity extends NormalScreen {
     }
     private void open(String action){try{startActivity(new Intent(action));}catch(ActivityNotFoundException e){message("Pagina non disponibile. Apri manualmente le impostazioni Android.");}}
     private void guard(Runnable action) {
+        if(NormalAutonomy.locked(this)){message("Impostazioni interne protette fino alla scadenza. Richiedi lo sblocco o usa l'emergenza. Il consenso SMS resta revocabile.");return;}
         if(busy)return;String hash=NormalSafety.prefs(this).getString("trustedHash",null);
         if(hash==null || (SystemClock.elapsedRealtime()<authorizedUntil && java.util.Objects.equals(hash,authorizedHash))){action.run();return;}
         EditText input=secret("Codice persona fidata");

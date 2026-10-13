@@ -115,14 +115,18 @@ final class NormalSafety {
     static long releaseRemaining(Context c) {
         if(granted(c))return 0;
         NormalDeadline d=deadline(prefs(c),"release",DAY);
-        return d==null?DAY:d.remaining(System.currentTimeMillis(),SystemClock.elapsedRealtime(),boot(c));
+        long ordinary=d==null?DAY:d.remaining(System.currentTimeMillis(),SystemClock.elapsedRealtime(),boot(c));
+        return Math.max(ordinary,NormalAutonomy.remaining(c));
     }
     static boolean granted(Context c) {return prefs(c).getInt("grantBoot",-2)==boot(c) && SystemClock.elapsedRealtime()<prefs(c).getLong("grantUntil",0);}
     static boolean grant(Context c) {return prefs(c).edit().putInt("grantBoot",boot(c)).putLong("grantUntil",SystemClock.elapsedRealtime()+10*60_000L).commit();}
     static void cancelRelease(Context c){synchronized(LOCK){android.content.SharedPreferences.Editor e=prefs(c).edit().remove("grantUntil");putDeadline(e,"release",null);e.commit();}}
     static boolean voluntaryStop(Context c) {
+        if(NormalAutonomy.locked(c) && releaseRemaining(c)>0)return false;
         // A successful voluntary release must never trigger app-driven reactivation.
-        if(!prefs(c).edit().putBoolean("paused",true).putBoolean("recovery",false).commit())return false;
+        android.content.SharedPreferences.Editor release=prefs(c).edit().putBoolean("paused",true).putBoolean("recovery",false).putBoolean("contentConsent",false);
+        NormalAutonomy.clear(release);
+        if(!release.commit())return false;
         c.getSharedPreferences("shield",0).edit().putBoolean("wanted",false).commit();
         DevicePolicyManager manager=c.getSystemService(DevicePolicyManager.class);
         ComponentName admin=new ComponentName(c,NormalAdminReceiver.class);
@@ -130,7 +134,9 @@ final class NormalSafety {
         try{if(ShieldVpnService.running)c.startService(new Intent(c,ShieldVpnService.class).setAction("STOP"));else c.stopService(new Intent(c,ShieldVpnService.class));cancelRelease(c);return true;}catch(RuntimeException e){prefs(c).edit().putString("recoveryIssue","Arresto non eseguito: usa le impostazioni VPN Android.").apply();return false;}
     }
     static String status(Context c) {
-        boolean active=protectedNow(c);String text=active?"VPN locale attiva":"VPN locale disattivata: filtro non attivo";
+        boolean active=protectedNow(c);String text=active?"VPN locale attiva":"VPN locale disattivata: filtro di rete non attivo";
+        text+="\n"+NormalAutonomy.status(c);
+        text+="\nLivello contenuti: "+(!NormalContentService.consent(c)?"non consentito":!NormalContentService.enabledInSettings(c)?"permesso revocato / disattivato":!NormalContentService.connected()?"consentito; servizio non collegato":NormalContentService.rulesReady()?"servizio e regole caricati; copertura limitata alle app e URL supportati":"servizio collegato; regole non ancora disponibili");
         if(active)text+=physicalAvailable(c)&&c.getSharedPreferences("shield",0).getBoolean("connectivityOk",false)?" / Internet verificato":" / rete assente o verifica Internet incompleta";
         android.content.SharedPreferences p=prefs(c);
         Boolean always=NormalMonitorService.alwaysOn(),lock=NormalMonitorService.lockdown();

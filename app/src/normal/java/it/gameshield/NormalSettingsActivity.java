@@ -15,6 +15,7 @@ public final class NormalSettingsActivity extends NormalScreen {
         super.onCreate(state);if(BuildConfig.STRONG){finish();return;}
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
         store=new NormalPinStore(this);layout("Impostazioni Normal");status=label("",20);
+        button("Protezione Autonoma / livelli indipendenti",()->startActivity(new Intent(this,NormalLayersActivity.class)));
         label("Il PIN per disattivazione è facoltativo. Non impedisce la disinstallazione né l’accesso alle impostazioni Android. Se lo dimentichi, puoi rimuovere la VPN dalle impostazioni Android o disinstallare GameShield.",15);
         button("Imposta / modifica PIN",()->manage(false));button("Rimuovi PIN",()->manage(true));
         button("Compatibilità Android Auto",()->startActivity(new Intent(this,AndroidAutoSettingsActivity.class)));
@@ -26,6 +27,7 @@ public final class NormalSettingsActivity extends NormalScreen {
     }
     private void refresh(){status.setText("PIN per disattivazione: "+(store.configured()?"attivo":"disattivato"));}
     private void manage(boolean remove){
+        if(NormalAutonomy.locked(this)){message("Periodo autonomo attivo: richiedi lo sblocco o usa la procedura di emergenza.");return;}
         if(busy)return;
         String expected=store.hash();
         if(remove && expected==null){message("Il PIN è già disattivato");return;}
@@ -50,7 +52,7 @@ public final class NormalSettingsActivity extends NormalScreen {
                 }catch(java.security.GeneralSecurityException e){failure="PIN non salvato. Riprova.";}
                 finally{Arrays.fill(old,'\0');Arrays.fill(next,'\0');Arrays.fill(again,'\0');}
                 String result=failure, encoded=replacement;
-                deliver(()->{busy=false;refresh();if(!dialog.isShowing())return;dialog.getButton(-1).setEnabled(true);if(result!=null)error.setText(result);else if(!store.replace(expected,encoded))error.setText("Salvataggio non riuscito. Ripeti la verifica.");else{refresh();dialog.dismiss();message(remove?"PIN rimosso":"PIN salvato");}});
+                deliver(()->{busy=false;refresh();if(!dialog.isShowing())return;dialog.getButton(-1).setEnabled(true);if(NormalAutonomy.locked(this))error.setText("Periodo autonomo attivo: modifica non applicata.");else if(result!=null)error.setText(result);else if(!store.replace(expected,encoded))error.setText("Salvataggio non riuscito. Ripeti la verifica.");else{refresh();dialog.dismiss();message(remove?"PIN rimosso":"PIN salvato");}});
             });
         });});dialog.show();
     }

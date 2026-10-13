@@ -7,6 +7,8 @@ on:
       - 'app/src/androidTestNormal/**'
       - 'app/build.gradle'
       - 'scripts/normal_resilience_device.py'
+      - 'fixtures/**'
+      - 'settings.gradle'
       - '.github/workflows/normal-resilience.yml'
   workflow_dispatch:
 permissions:
@@ -14,7 +16,7 @@ permissions:
 jobs:
   normal:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -34,7 +36,7 @@ jobs:
         run: |
           chmod +x gradlew
           python3 -m unittest discover -s scripts -p 'test_*.py'
-          ./gradlew --no-daemon --max-workers=2 testNormalDebugUnitTest testStrongDebugUnitTest lintNormalDebug assembleNormalDebug assembleNormalDebugAndroidTest
+          ./gradlew --no-daemon --max-workers=2 -PnormalLayerFixtures=true testNormalDebugUnitTest testStrongDebugUnitTest lintNormalDebug assembleNormalDebug assembleNormalDebugAndroidTest :normalFixture:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: Normal-SMS-debug-and-device-tests
@@ -69,3 +71,17 @@ jobs:
           path: |
             normal-device-reports/
             app/build/reports/
+      - name: Normal layers and release regression on Android 36
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: python3 scripts/normal_resilience_device.py app/build/outputs/apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Normal-Android-36-validation
+          path: normal-device-reports/

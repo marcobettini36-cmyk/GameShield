@@ -2,3 +2,8 @@ pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal()
 dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral() } }
 rootProject.name = 'GameShield'
 include ':app'
+// Disposable synthetic app for Normal instrumentation; excluded from ordinary builds.
+if (providers.gradleProperty('normalLayerFixtures').orNull == 'true') {
+    include ':normalFixture'
+    project(':normalFixture').projectDir = file('fixtures/normal-app')
+}

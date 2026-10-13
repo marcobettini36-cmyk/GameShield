@@ -18,6 +18,7 @@ final class NormalTrusted {
     }
     static boolean replace(Context c,String expected,String replacement) {
         synchronized(NormalSafety.LOCK) {
+            if(NormalAutonomy.locked(c))return false;
             android.content.SharedPreferences p=NormalSafety.prefs(c);if(!Objects.equals(expected,p.getString("trustedHash",null)))return false;
             android.content.SharedPreferences.Editor e=p.edit().remove("grantUntil").remove("trustedRetry").putInt("trustedFailures",0);
             if(replacement==null)e.remove("trustedHash");else e.putString("trustedHash",replacement);
