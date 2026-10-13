@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-10-12T12:11:55.935377+00:00",
-  "count": 591799,
-  "sha256": "5d3e06f3707e92b886d359fdd0f8f780777a7d6b02085b06c9cfa7548a0c845f",
+  "generated_at": "2026-10-13T11:56:50.632250+00:00",
+  "count": 591651,
+  "sha256": "10fa8a1da1274b9c6fffe69bc76d2693468c648760161c32d21e96ee649f5ed9",
   "sources": {
     "adm-authorized": {
       "count": 52,
@@ -12,8 +12,8 @@
       "sha256": "c2d12bab8f247fcc7ba497be68e045405723f0100115b77700a4f0c840e23fbf"
     },
     "hagezi": {
-      "count": 583599,
-      "sha256": "a17c2ad0f4e9d2dd3fbed285d01c6c7e3c7d53f8c1d4635be23f300b77adb288"
+      "count": 583449,
+      "sha256": "3c929c741588fd0699f448954c778c6944af1ac3c1aec1cf5066131b184c121d"
     }
   },
   "warnings": []
