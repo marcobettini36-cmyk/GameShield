@@ -11,8 +11,10 @@ public final class NormalHomeActivity extends NormalScreen {
     private final Runnable refresh=new Runnable(){public void run(){render();handler.postDelayed(this,2000);}};
     @Override public void onCreate(Bundle b){super.onCreate(b);layout("Più spazio alla tua vita.");
         label("Protezione dal gioco d'azzardo, sotto il tuo controllo.",17);
-        state=label("",28);details=label("",16);
-        button("Configura protezione",()->startActivity(new Intent(this,NormalSetupActivity.class)));
+        state=panel("",28);
+        android.graphics.drawable.Drawable shield=getDrawable(it.gameshield.R.drawable.shield);if(shield!=null){shield.setTint(0xff58e5aa);shield.setBounds(0,0,dp(32),dp(32));state.setCompoundDrawables(shield,null,null,null);state.setCompoundDrawablePadding(dp(12));}
+        Button configure=button("Configura protezione",()->startActivity(new Intent(this,NormalSetupActivity.class)));configure.setTextColor(0xff092a1b);android.graphics.drawable.GradientDrawable primary=new android.graphics.drawable.GradientDrawable();primary.setColor(0xff58e5aa);primary.setCornerRadius(dp(16));configure.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x33000000),primary,null));
+        label("I tuoi livelli di protezione",21);details=panel("",16);
         button("Attiva protezione",this::activate);
         button("Disattiva protezione",()->startActivity(new Intent(this,NormalDisableActivity.class)));
         button("Come funziona GameShield",()->startActivity(new Intent(this,NormalHelpActivity.class)));
