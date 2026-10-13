@@ -10,7 +10,7 @@ import static org.junit.Assert.*;
 public class NormalRebootDeviceTest {
     @Test public void prepareBootCommitment()throws Exception {
         Instrumentation i=InstrumentationRegistry.getInstrumentation();Context c=i.getTargetContext();NormalSafety.prefs(c).edit().clear().commit();
-        Activity a=i.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        NormalSafety.prefs(c).edit().putBoolean("setupSeen060",true).commit();Activity a=i.startActivitySync(new Intent(c,NormalHomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         c.startForegroundService(new Intent(c,ShieldVpnService.class));long end=SystemClock.elapsedRealtime()+180_000;
         while(!NormalSafety.protectedNow(c)&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(200);assertTrue(NormalSafety.protectedNow(c));
         assertTrue(NormalAutonomy.start(c,7));NormalSafety.prefs(c).edit().putBoolean("contentConsent",true).putBoolean("recovery",true).putInt("testBootBefore",NormalSafety.boot(c)).putLong("testAutonomyWall",NormalSafety.prefs(c).getLong("autonomyWall",0)).commit();NormalSafety.startMonitor(c);i.runOnMainSync(a::finish);

@@ -1,7 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.SEND_SMS" tools:node="${normalSmsNode}" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
-    <application>
+    <application android:theme="@style/NormalTheme" tools:replace="android:theme">
+        <activity android:name="it.gameshield.MainActivity" android:exported="false" tools:node="replace" />
+        <activity android:name="it.gameshield.NormalHomeActivity" android:exported="true">
+            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name="it.gameshield.NormalSetupActivity" android:exported="false" />
+        <activity android:name="it.gameshield.NormalHelpActivity" android:exported="false" />
         <activity android:name="it.gameshield.NormalLayersActivity" android:exported="false" />
         <activity android:name="it.gameshield.NormalDnsActivity" android:exported="false" />
         <service android:name="it.gameshield.NormalContentService" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" android:exported="true" android:label="GameShield: blocco contenuti gambling">

@@ -30,13 +30,28 @@ fixtures = list(Path('fixtures/normal-app/build/outputs/apk/debug').glob('*.apk'
 if len(fixtures) != 1:
     raise RuntimeError('Build the disposable :normalFixture APK before running layer tests')
 adb('install', '-r', str(fixtures[0]))
-for name in ('NormalResilienceDeviceTest', 'NormalDisableDeviceTest', 'NormalLayersDeviceTest'):
+for name in ('NormalUiDeviceTest', 'NormalResilienceDeviceTest', 'NormalDisableDeviceTest', 'NormalLayersDeviceTest'):
     result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.'+name,
                  'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner', timeout=1000)
     (out/(name+'.txt')).write_text(result, encoding='utf-8')
     print(result)
     if 'FAILURES!!!' in result or 'INSTRUMENTATION_FAILED' in result or 'OK (' not in result:
         raise RuntimeError(name+' did not pass')
+
+# Screenshot additional small layout with enlarged system text, on emulator only.
+adb('shell', 'wm', 'size', '720x1280')
+adb('shell', 'settings', 'put', 'system', 'font_scale', '1.5')
+try:
+    result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
+                 'it.gameshield.NormalUiDeviceTest#smallScreenAndLargeText',
+                 'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner')
+    (out/'SmallLayout.txt').write_text(result, encoding='utf-8')
+    if 'FAILURES!!!' in result or 'OK (' not in result:
+        raise RuntimeError('Small layout validation failed')
+    adb('pull', '/sdcard/Android/data/it.gameshield/files/screenshots', str(out))
+finally:
+    adb('shell', 'wm', 'size', 'reset')
+    adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
 
 # The shell fixture is emulator-only. No Device Owner is ever provisioned.
 adb('shell', 'settings', 'put', 'secure', 'enabled_accessibility_services', 'null')

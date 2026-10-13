@@ -51,7 +51,7 @@ public class NormalResilienceDeviceTest {
     }
     @Test public void recoveryRestartsAuthorizedTunnelButNeverAfterVoluntaryRelease()throws Exception {
         assertNull(android.net.VpnService.prepare(c));
-        screen=inst.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();
+        NormalSafety.prefs(c).edit().putBoolean("setupSeen060",true).commit();screen=inst.startActivitySync(new Intent(c,NormalHomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();
         c.startForegroundService(new Intent(c,ShieldVpnService.class));awaitProtection();NormalSafety.check(c);
         NormalSafety.prefs(c).edit().putBoolean("recovery",true).putBoolean("paused",false).commit();NormalSafety.startMonitor(c);
         java.util.concurrent.CountDownLatch stopped=new java.util.concurrent.CountDownLatch(1);

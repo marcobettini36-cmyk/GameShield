@@ -12,14 +12,14 @@ abstract class NormalScreen extends Activity {
     final ExecutorService worker=Executors.newSingleThreadExecutor();
     LinearLayout root;
     void layout(String title) {
-        getWindow().setStatusBarColor(0xff072d36); getWindow().setNavigationBarColor(0xff072d36);
+        getWindow().setStatusBarColor(0xff101816); getWindow().setNavigationBarColor(0xff101816);
         ScrollView scroll=new ScrollView(this); root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(24,32,24,32); root.setBackgroundColor(Color.rgb(241,247,247)); scroll.addView(root); setContentView(scroll);
+        root.setPadding(24,32,24,32); root.setBackgroundColor(0xff101816); scroll.setFillViewport(true); scroll.addView(root); setContentView(scroll);
         scroll.setOnApplyWindowInsetsListener((v,i)->{root.setPadding(dp(22),dp(28)+i.getSystemWindowInsetTop(),dp(22),dp(32)+i.getSystemWindowInsetBottom());return i;});
         label("GAMESHIELD / NORMAL",14); label(title,25);
     }
-    TextView label(String text,int size) { TextView v=new TextView(this); v.setText(text); v.setTextSize(size); v.setTextColor(0xff072d36); v.setPadding(0,dp(8),0,dp(8)); if(size>=20)v.setTypeface(null,Typeface.BOLD); root.addView(v); return v; }
-    Button button(String text,Runnable action) { Button b=new Button(this); b.setText(text); b.setAllCaps(false); b.setTextColor(0xff087f8c); b.setOnClickListener(v->action.run());root.addView(b,new LinearLayout.LayoutParams(-1,-2));return b; }
+    TextView label(String text,int size) { TextView v=new TextView(this); v.setText(text); v.setTextSize(size); v.setTextColor(size>=20?0xfff1fff8:0xffc9ded3); v.setPadding(0,dp(8),0,dp(8)); if(size>=20)v.setTypeface(null,Typeface.BOLD); root.addView(v); return v; }
+    Button button(String text,Runnable action) { Button b=new Button(this); b.setText(text); b.setAllCaps(false); b.setTextColor(0xffeffff6); b.setMinHeight(dp(56)); b.setTextSize(16); android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable(); bg.setColor(0xff145c44); bg.setCornerRadius(dp(16)); b.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x4458e5aa),bg,null)); b.setPadding(dp(16),dp(12),dp(16),dp(12)); b.setOnClickListener(v->action.run());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,dp(5),0,dp(5));root.addView(b,p);return b; }
     EditText field(String hint,boolean secret) {
         EditText e=new EditText(this); e.setHint(hint); e.setSingleLine(true);
         e.setInputType(InputType.TYPE_CLASS_NUMBER|(secret?InputType.TYPE_NUMBER_VARIATION_PASSWORD:0));

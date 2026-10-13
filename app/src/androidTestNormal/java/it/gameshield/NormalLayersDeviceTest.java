@@ -40,7 +40,7 @@ public class NormalLayersDeviceTest {
         assertTrue(NormalDnsProbe.blocked(java.util.List.of(java.net.InetAddress.getByName("0.0.0.0"))));assertFalse(NormalDnsProbe.blocked(java.util.List.of(java.net.InetAddress.getByName("8.8.8.8"))));
     }
     @Test public void actualVpnKeepsAllowedHttpsAndBlocksGamblingAndManualDomain()throws Exception {
-        Activity main=inst.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        NormalSafety.prefs(c).edit().putBoolean("setupSeen060",true).commit();Activity main=inst.startActivitySync(new Intent(c,NormalHomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         try {
             assertNull(VpnService.prepare(c));c.startForegroundService(new Intent(c,ShieldVpnService.class));
             long end=SystemClock.elapsedRealtime()+180_000;while(!NormalSafety.protectedNow(c)&&SystemClock.elapsedRealtime()<end)SystemClock.sleep(200);assertTrue(NormalSafety.protectedNow(c));

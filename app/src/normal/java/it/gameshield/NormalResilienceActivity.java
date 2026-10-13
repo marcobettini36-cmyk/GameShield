@@ -55,7 +55,7 @@ public final class NormalResilienceActivity extends NormalScreen {
         button("Richiedi disattivazione Normal (24 ore)",()->startActivity(new Intent(this,NormalDisableActivity.class)));
         button("Procedura di emergenza",()->startActivity(new Intent(this,NormalEmergencyActivity.class)));
         button("Torna indietro",this::finish);
-        if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},73);
+        button("Consenti notifiche di stato",()->{if(Build.VERSION.SDK_INT>=33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},73);else message("Notifiche già consentite o non richieste da questa versione Android.");});
     }
     private void open(String action){try{startActivity(new Intent(action));}catch(ActivityNotFoundException e){message("Pagina non disponibile. Apri manualmente le impostazioni Android.");}}
     private void guard(Runnable action) {

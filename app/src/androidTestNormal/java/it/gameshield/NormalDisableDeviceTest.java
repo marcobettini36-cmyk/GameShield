@@ -61,7 +61,7 @@ public class NormalDisableDeviceTest {
         while(SystemClock.elapsedRealtime()<until){AtomicReference<Activity>a=new AtomicReference<>();ui(()->{for(Activity current:ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED))if(current instanceof NormalDisableActivity&&current!=old)a.set(current);});if(a.get()!=null){screen=a.get();return;}SystemClock.sleep(100);}fail("Activity recreation failed");
     }
     @Test public void countdownCancellationRecreationAndFinalConfirmation()throws Exception{
-        screen=inst.startActivitySync(new Intent(c,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();
+        NormalSafety.prefs(c).edit().putBoolean("setupSeen060",true).commit();screen=inst.startActivitySync(new Intent(c,NormalHomeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));inst.waitForIdleSync();
         Activity main=screen;completedDay();click("Disattiva protezione");awaitScreen(main);DisableSession first=session();assertTrue(first.remaining(SystemClock.elapsedRealtime())>=59);
         Button proceed=(Button)field("proceed");assertFalse(proceed.isEnabled());click("Continua");active();
         click("Annulla e mantieni protezione");active();open();assertNotEquals(first.code,session().code);

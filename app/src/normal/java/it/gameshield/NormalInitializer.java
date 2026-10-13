@@ -11,6 +11,12 @@ public final class NormalInitializer extends ContentProvider {
     private ConnectivityManager.NetworkCallback callback;
     @Override public boolean onCreate() {
         Context c=getContext();
+        ((android.app.Application)c.getApplicationContext()).registerActivityLifecycleCallbacks(new android.app.Application.ActivityLifecycleCallbacks(){
+            public void onActivityCreated(android.app.Activity a,Bundle b){if(a instanceof MainActivity){a.startActivity(new Intent(a,NormalHomeActivity.class));a.finish();}}
+            public void onActivityStarted(android.app.Activity a){} public void onActivityResumed(android.app.Activity a){}
+            public void onActivityPaused(android.app.Activity a){} public void onActivityStopped(android.app.Activity a){}
+            public void onActivitySaveInstanceState(android.app.Activity a,Bundle b){} public void onActivityDestroyed(android.app.Activity a){}
+        });
         listener=(p,key)->{if("wanted".equals(key)||"connectivityOk".equals(key)||"error".equals(key)){handler.removeCallbacks(check);handler.postDelayed(check,500);}};
         c.getSharedPreferences("shield",0).registerOnSharedPreferenceChangeListener(listener);
         callback=new ConnectivityManager.NetworkCallback(){
