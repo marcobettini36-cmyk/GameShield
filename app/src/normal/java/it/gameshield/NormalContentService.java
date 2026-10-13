@@ -86,8 +86,8 @@ public final class NormalContentService extends AccessibilityService {
     }
     private void show(){
         if(overlay!=null)return;
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(32,32,32,32);box.setBackgroundColor(0xfff1f7f7);
-        TextView text=new TextView(this);text.setText("GameShield Normal\nAccesso gambling interrotto. Questo livello opera anche senza VPN. Le impostazioni Android restano accessibili.");text.setTextColor(0xff072d36);text.setTextSize(18);box.addView(text);
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(32,32,32,32);box.setBackgroundColor(0xff101816);
+        TextView text=new TextView(this);text.setText("GameShield Normal\nAccesso al gioco d'azzardo interrotto. Questo livello opera anche senza VPN. Le impostazioni Android restano accessibili.");text.setTextColor(0xffeffff6);text.setTextSize(18);box.addView(text);
         Button settings=new Button(this);settings.setText("Impostazioni / emergenza");settings.setOnClickListener(v->{allowSettingsUntil=SystemClock.elapsedRealtime()+3000;generation++;hide();startActivity(new Intent(this,NormalLayersActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));});box.addView(settings);
         WindowManager.LayoutParams p=new WindowManager.LayoutParams(-1,-2,WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,android.graphics.PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP;
         try{getSystemService(WindowManager.class).addView(box,p);overlay=box;}catch(RuntimeException ignored){/* HOME intervention still works if overlay is unavailable. */}
