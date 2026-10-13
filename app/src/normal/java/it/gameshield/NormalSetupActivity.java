@@ -11,6 +11,7 @@ public final class NormalSetupActivity extends NormalScreen {
     private int step;
     private TextView progress,title,explanation,check;
     private android.widget.Button action;
+    private final Runnable refresh=new Runnable(){public void run(){if(check!=null)render();handler.postDelayed(this,1500);}};
     private static final String[] TITLES={"Filtro Internet","Protezione sempre attiva","Internet solo con protezione","Proteggi anche le applicazioni","Un passaggio prima della rimozione","Un filtro aggiuntivo della rete","Scegli un periodo di protezione","Un aiuto facoltativo"};
     private static final String[] TEXT={
         "Il filtro locale blocca i domini di gioco conosciuti e lascia passare quelli consentiti. Android lo chiama VPN: non è una VPN remota. Richiede il tuo consenso e sostituisce altre VPN.",
@@ -44,6 +45,7 @@ public final class NormalSetupActivity extends NormalScreen {
         case 7:startActivity(new Intent(this,NormalResilienceActivity.class));break;
     }}catch(RuntimeException e){message("Questa pagina non è disponibile. Segui il percorso indicato nelle impostazioni.");}}
     @Override protected void onActivityResult(int r,int result,Intent data){super.onActivityResult(r,result,data);if(r==42&&result==RESULT_OK){try{startForegroundService(new Intent(this,ShieldVpnService.class));}catch(RuntimeException e){message("Filtro non avviato. Riprova dalla schermata principale.");}}}
-    @Override protected void onResume(){super.onResume();if(check!=null){render();handler.postDelayed(()->{if(!isFinishing())render();},1500);}}
+    @Override protected void onResume(){super.onResume();handler.removeCallbacks(refresh);refresh.run();}
+    @Override protected void onStop(){handler.removeCallbacks(refresh);super.onStop();}
     @Override protected void onSaveInstanceState(Bundle b){b.putInt("step",step);super.onSaveInstanceState(b);}
 }
