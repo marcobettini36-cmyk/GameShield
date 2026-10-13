@@ -123,8 +123,13 @@ public class TunnelDeviceTest {
     }
     @Test public void testChromiumWebViewBrowsingThroughVpn() throws Exception {
         Network tunnel = start();
+        Intent screen = new Intent(context, MainActivity.class);
+        if (!BuildConfig.STRONG) {
+            context.getSharedPreferences("normal_safety",0).edit().putBoolean("setupSeen060",true).commit();
+            screen.setClassName(context,"it.gameshield.NormalHomeActivity");
+        }
         Activity activity = InstrumentationRegistry.getInstrumentation().startActivitySync(
-            new Intent(context, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            screen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         AtomicReference<WebView> browser = new AtomicReference<>();
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             WebView view = new WebView(activity); view.getSettings().setJavaScriptEnabled(true);
