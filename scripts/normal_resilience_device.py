@@ -58,7 +58,9 @@ activation = subprocess.run(['adb', '-s', serial, 'shell', 'dpm', 'set-active-ad
                              'it.gameshield/it.gameshield.NormalAdminReceiver'], text=True, capture_output=True, timeout=30)
 (out/'NormalAdminActivation.txt').write_text(activation.stdout+activation.stderr, encoding='utf-8')
 if activation.returncode == 0:
-    attempt = adb('shell', 'pm', 'uninstall', 'it.gameshield')
+    uninstall = subprocess.run(['adb', '-s', serial, 'shell', 'pm', 'uninstall', 'it.gameshield'],
+                               text=True, capture_output=True, timeout=30)
+    attempt = uninstall.stdout+uninstall.stderr
     (out/'UninstallWhileAdmin.txt').write_text(attempt, encoding='utf-8')
     if 'DELETE_FAILED_DEVICE_POLICY_MANAGER' not in attempt:
         raise RuntimeError('Expected Android administrator uninstall restriction: '+attempt)

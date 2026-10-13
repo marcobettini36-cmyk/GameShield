@@ -36,7 +36,7 @@ public final class NormalLayersActivity extends NormalScreen {
     }
     private void disclosure(){new AlertDialog.Builder(this).setTitle("Consenso separato: Accessibility")
         .setMessage("GameShield accede al nome dell'app in primo piano e, nei browser supportati, al testo del controllo indirizzo. Con regole fisse interrompe il contenuto gambling e torna alla Home. Non conserva né trasmette questi dati, non legge password o messaggi, non acquisisce screenshot e non blocca Impostazioni, revoca permessi o disinstallazione. Le strutture dei browser e Android 16 possono limitarne la copertura. Il servizio resta revocabile. Consenti questo uso locale?")
-        .setNegativeButton("Non consentire",null).setPositiveButton("Acconsento: apri Android",(d,w)->{NormalSafety.prefs(this).edit().putBoolean("contentConsent",true).commit();open(Settings.ACTION_ACCESSIBILITY_SETTINGS);}).show();}
+        .setNegativeButton("Annulla",null).setPositiveButton("Acconsento: apri Android",(d,w)->{NormalSafety.prefs(this).edit().putBoolean("contentConsent",true).commit();open(Settings.ACTION_ACCESSIBILITY_SETTINGS);}).show();}
     private void open(String action){try{startActivity(new Intent(action));}catch(ActivityNotFoundException|SecurityException e){message("Apri manualmente la pagina nelle impostazioni Android.");}}
     @Override protected void onResume(){super.onResume();handler.removeCallbacks(refresh);refresh.run();}
     @Override protected void onStop(){handler.removeCallbacks(refresh);super.onStop();}
