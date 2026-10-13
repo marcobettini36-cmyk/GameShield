@@ -16,7 +16,11 @@ public class NormalLayersTest {
     }
     @Test public void visibleHostRequiresAddressNotPageText(){
         assertEquals("bet365.com",NormalVisibleHost.parse("https://bet365.com/path?q=1"));assertEquals("bet365.com",NormalVisibleHost.parse("bet365.com"));
-        assertNull(NormalVisibleHost.parse("Article about bet365.com"));assertNull(NormalVisibleHost.parse("https://bank.com@bet365.com"));assertNull(NormalVisibleHost.parse("javascript:bet365.com"));
+        assertNull(NormalVisibleHost.parse("Article about bet365.com"));assertEquals("bet365.com",NormalVisibleHost.parse("https://bank.com@bet365.com"));assertEquals("bank.com",NormalVisibleHost.parse("https://bet365.com@bank.com"));assertNull(NormalVisibleHost.parse("javascript:bet365.com"));
+        assertEquals("bet365.com",NormalVisibleHost.parse("https://bet365.com/?email=user@bank.com"));
+        assertEquals("bet365.com",NormalVisibleHost.parse("https://bet365.com/?"+"q".repeat(3000)+"%"));
+        assertEquals("xn--caf-dma.bet365.com",NormalVisibleHost.parse("https://café.bet365.com/path"));
+        assertNull(NormalVisibleHost.parse("mailto:user@bet365.com"));assertNull(NormalVisibleHost.parse("ftp://bet365.com/path"));
         assertNull(NormalVisibleHost.parse("127.0.0.1"));assertEquals("google.com",NormalVisibleHost.parse("https://google.com/search?q=bet365.com"));
     }
     @Test public void periodsOnlyAcceptExplicitChoicesAndNeverExpireOnClockChangeInSameBoot(){

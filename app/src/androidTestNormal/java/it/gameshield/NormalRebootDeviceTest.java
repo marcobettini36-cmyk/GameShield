@@ -21,7 +21,9 @@ public class NormalRebootDeviceTest {
         assertEquals(NormalSafety.prefs(c).getLong("testAutonomyWall",-1),NormalSafety.prefs(c).getLong("autonomyWall",-2));
         assertTrue(NormalAutonomy.remaining(c)>6*NormalSafety.DAY);assertTrue(NormalContentService.consent(c));assertFalse(NormalSafety.granted(c));
         long until=SystemClock.elapsedRealtime()+60_000;while(!NormalSafety.protectedNow(c)&&SystemClock.elapsedRealtime()<until)SystemClock.sleep(200);
-        Bundle evidence=new Bundle();evidence.putString("rebootProtectionState","VPN="+NormalSafety.protectedNow(c)+"; contenuti="+NormalContentService.connected());InstrumentationRegistry.getInstrumentation().sendStatus(2,evidence);
+        long layerUntil=SystemClock.elapsedRealtime()+60_000;while(!NormalContentService.rulesReady()&&SystemClock.elapsedRealtime()<layerUntil)SystemClock.sleep(200);
+        Bundle evidence=new Bundle();evidence.putString("rebootProtectionState","VPN="+NormalSafety.protectedNow(c)+"; contenuti="+NormalContentService.connected()+"; regole="+NormalContentService.rulesReady());InstrumentationRegistry.getInstrumentation().sendStatus(2,evidence);
+        assertTrue("Configured Accessibility service not restored after reboot",NormalContentService.connected());assertTrue(NormalContentService.rulesReady());
         // Persistence is guaranteed by storage; OEM background recovery is best effort.
         assertTrue(NormalSafety.grant(c));assertTrue(NormalSafety.voluntaryStop(c));assertEquals(0,NormalAutonomy.remaining(c));
     }

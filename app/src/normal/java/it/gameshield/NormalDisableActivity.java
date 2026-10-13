@@ -40,6 +40,7 @@ public final class NormalDisableActivity extends NormalScreen {
             p.edit().putString("previous",session.code).apply();
         }
         layout("Disattiva protezione");
+        label("Il rilascio sospende i livelli gestiti da GameShield. Un DNS privato filtrante, il blocco senza VPN o altri filtri esterni possono restare attivi: gestiscili tu nelle impostazioni Android.",15);
         label("Stai per disattivare GameShield.\nDurante la disattivazione i siti bloccati torneranno accessibili.",17);
         label("Questo tempo di attesa serve a evitare disattivazioni impulsive.",15);
         label("L'attesa di 24 ore continua anche chiudendo l'app. La persona fidata può autorizzare un rilascio anticipato. Android mantiene sempre il controllo delle proprie impostazioni.",15);

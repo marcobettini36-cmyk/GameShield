@@ -139,6 +139,7 @@ final class NormalSafety {
         text+="\nLivello contenuti: "+(!NormalContentService.consent(c)?"non consentito":!NormalContentService.enabledInSettings(c)?"permesso revocato / disattivato":!NormalContentService.connected()?"consentito; servizio non collegato":NormalContentService.rulesReady()?"servizio e regole caricati; copertura limitata alle app e URL supportati":"servizio collegato; regole non ancora disponibili");
         if(active)text+=physicalAvailable(c)&&c.getSharedPreferences("shield",0).getBoolean("connectivityOk",false)?" / Internet verificato":" / rete assente o verifica Internet incompleta";
         android.content.SharedPreferences p=prefs(c);
+        if(p.contains("contentIssue"))text+="\n"+p.getString("contentIssue","");
         Boolean always=NormalMonitorService.alwaysOn(),lock=NormalMonitorService.lockdown();
         text+="\nAlways-on: "+(always==null?"verifica nelle impostazioni Android":always?"attivo":"disattivato");
         text+="\nBlocca connessioni senza VPN: "+(lock==null?"verifica nelle impostazioni Android":lock?"attivo":"disattivato");

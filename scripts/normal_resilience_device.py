@@ -80,6 +80,9 @@ def boot_test(method):
     if 'FAILURES!!!' in result or 'OK (' not in result:
         raise RuntimeError('Actual reboot phase failed: '+method)
 
+adb('shell', 'settings', 'put', 'secure', 'enabled_accessibility_services',
+    'it.gameshield/it.gameshield.NormalContentService')
+adb('shell', 'settings', 'put', 'secure', 'accessibility_enabled', '1')
 boot_test('prepareBootCommitment')
 adb('reboot')
 adb('wait-for-device', timeout=180)

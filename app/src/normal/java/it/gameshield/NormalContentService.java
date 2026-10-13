@@ -44,9 +44,9 @@ public final class NormalContentService extends AccessibilityService {
         try {RuleStore next=new RuleStore(this);NormalAppCatalog catalog;
             try(InputStream in=getAssets().open("gambling-apps.txt")){catalog=new NormalAppCatalog(new InputStreamReader(in,StandardCharsets.UTF_8));}
             if(destroyed)return;
-            store=next;apps=catalog;ready=true;loaded=true;
-            handler.post(()->{if(destroyed)return;generation++;hide();candidate=null;evaluate();});
-        }catch(IOException|RuntimeException e){ready=false;loaded=false;handler.post(()->{hide();NormalSafety.prefs(this).edit().putString("contentIssue","Regole indipendenti non caricate: nessun blocco contenuti; VPN invariata.").apply();});}
+            store=next;apps=catalog;
+            handler.post(()->{if(destroyed)return;ready=true;loaded=true;NormalSafety.prefs(this).edit().remove("contentIssue").apply();generation++;hide();candidate=null;evaluate();});
+        }catch(IOException|RuntimeException|OutOfMemoryError e){handler.post(()->{if(destroyed)return;ready=false;loaded=false;store=null;apps=null;hide();NormalSafety.prefs(this).edit().putString("contentIssue","Regole indipendenti non disponibili (lettura o memoria): livello contenuti sospeso, VPN invariata.").apply();});}
     });}
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null)return;
