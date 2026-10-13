@@ -82,3 +82,17 @@ APK debug con chiave debug locale già esistente. AAB Play release senza SMS,
 unsigned in assenza della chiave upload originale; nessuna chiave sostitutiva.
 Per Play occorrono firma originale, controllo versionCode Console e revisione
 Accessibility/FGS. Nessuna pubblicazione automatica.
+
+
+## Chiusura del controllo visivo
+
+FAQ aggiunte per le impostazioni limitate degli APK esterni, secondo
+[Android Help](https://support.google.com/android/answer/12623953?hl=it),
+e per la migrazione manuale dal vecchio dnsforge Clean. La scelta resta
+dell'utente; nessun controllo Android viene aggirato.
+
+Gli screenshot attendono la scomparsa dei Toast. Prova compatta: 720×1280 pixel,
+densità 320 dpi (360 dp), caratteri 150%, con asserzioni reali della
+Configuration; schermate Home e assistenza. La modalità workflow_dispatch
+ui_only esegue soltanto UI/lifecycle/layout dopo queste modifiche; il default
+automatico resta la regressione completa. I report distinguono le due modalità.

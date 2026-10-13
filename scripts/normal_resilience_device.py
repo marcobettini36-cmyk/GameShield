@@ -9,6 +9,7 @@ serial = os.environ.get('ANDROID_SERIAL', 'emulator-5554')
 if not serial.startswith('emulator-'):
     raise SystemExit('These tests may reset Normal test preferences; physical devices are excluded.')
 apkdir = Path(sys.argv[1])
+ui_only = '--ui-only' in sys.argv
 out = Path('normal-device-reports')
 out.mkdir(exist_ok=True)
 
@@ -30,7 +31,8 @@ fixtures = list(Path('fixtures/normal-app/build/outputs/apk/debug').glob('*.apk'
 if len(fixtures) != 1:
     raise RuntimeError('Build the disposable :normalFixture APK before running layer tests')
 adb('install', '-r', str(fixtures[0]))
-for name in ('NormalUiDeviceTest', 'NormalResilienceDeviceTest', 'NormalDisableDeviceTest', 'NormalLayersDeviceTest'):
+classes = ('NormalUiDeviceTest',) if ui_only else ('NormalUiDeviceTest', 'NormalResilienceDeviceTest', 'NormalDisableDeviceTest', 'NormalLayersDeviceTest')
+for name in classes:
     result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class', 'it.gameshield.'+name,
                  'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner', timeout=1000)
     (out/(name+'.txt')).write_text(result, encoding='utf-8')
@@ -39,11 +41,14 @@ for name in ('NormalUiDeviceTest', 'NormalResilienceDeviceTest', 'NormalDisableD
         raise RuntimeError(name+' did not pass')
 
 # Screenshot additional small layout with enlarged system text, on emulator only.
+adb('pull', '/sdcard/Android/data/it.gameshield/files/screenshots', str(out/'layout-standard'))
 adb('shell', 'wm', 'size', '720x1280')
+adb('shell', 'wm', 'density', '320')
 adb('shell', 'settings', 'put', 'system', 'font_scale', '1.5')
 try:
     result = adb('shell', 'am', 'instrument', '-w', '-r', '-e', 'class',
                  'it.gameshield.NormalUiDeviceTest#smallScreenAndLargeText',
+                 '-e', 'largeText', 'true',
                  'it.gameshield.test/androidx.test.runner.AndroidJUnitRunner')
     (out/'SmallLayout.txt').write_text(result, encoding='utf-8')
     if 'FAILURES!!!' in result or 'OK (' not in result:
@@ -51,7 +56,12 @@ try:
     adb('pull', '/sdcard/Android/data/it.gameshield/files/screenshots', str(out))
 finally:
     adb('shell', 'wm', 'size', 'reset')
+    adb('shell', 'wm', 'density', 'reset')
     adb('shell', 'settings', 'put', 'system', 'font_scale', '1.0')
+
+if ui_only:
+    print('Targeted Normal UI/lifecycle/compact-font validation complete; VPN regression belongs to the full run.')
+    raise SystemExit(0)
 
 # The shell fixture is emulator-only. No Device Owner is ever provisioned.
 adb('shell', 'settings', 'put', 'secure', 'enabled_accessibility_services', 'null')

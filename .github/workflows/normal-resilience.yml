@@ -11,6 +11,11 @@ on:
       - 'settings.gradle'
       - '.github/workflows/normal-resilience.yml'
   workflow_dispatch:
+    inputs:
+      ui_only:
+        description: 'Run targeted UI/lifecycle/compact-font validation; full mode remains default'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -63,7 +68,7 @@ jobs:
           target: google_apis
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: python3 scripts/normal_resilience_device.py app/build/outputs/apk
+          script: python3 scripts/normal_resilience_device.py app/build/outputs/apk ${{ inputs.ui_only && '--ui-only' || '' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -79,7 +84,7 @@ jobs:
           target: google_apis
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
-          script: python3 scripts/normal_resilience_device.py app/build/outputs/apk
+          script: python3 scripts/normal_resilience_device.py app/build/outputs/apk ${{ inputs.ui_only && '--ui-only' || '' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
