@@ -10,8 +10,6 @@ if not serial.startswith('emulator-'):
     raise SystemExit('These tests may reset Normal test preferences; physical devices are excluded.')
 apkdir = Path(sys.argv[1])
 ui_only = '--ui-only' in sys.argv
-out = Path('normal-device-reports')
-out.mkdir(exist_ok=True)
 
 def adb(*args, timeout=600):
     p = subprocess.run(['adb', '-s', serial, *args], text=True, capture_output=True, timeout=timeout)
@@ -25,6 +23,10 @@ adb('install', '-r', str(app))
 adb('install', '-r', str(tests))
 adb('shell', 'appops', 'set', 'it.gameshield', 'ACTIVATE_VPN', 'allow')
 sdk = int(adb('shell', 'getprop', 'ro.build.version.sdk').strip())
+# Each invocation has its own SDK-labelled directory. In particular an early
+# Android 36 failure must never leave Android 35 files looking like 36 results.
+out = Path('normal-device-reports') / ('api-'+str(sdk)+'-'+str(time.time_ns()))
+out.mkdir(parents=True, exist_ok=False)
 if sdk >= 33:
     adb('shell', 'pm', 'grant', 'it.gameshield', 'android.permission.POST_NOTIFICATIONS')
 fixtures = list(Path('fixtures/normal-app/build/outputs/apk/debug').glob('*.apk'))

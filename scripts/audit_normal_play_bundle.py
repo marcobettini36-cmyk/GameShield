@@ -51,7 +51,7 @@ with zipfile.ZipFile(bundle) as z:
                             n = struct.unpack_from('<I', data, parameters)[0]
                             args = [types[struct.unpack_from('<H', data, parameters + 4 + j * 2)[0]] for j in range(n)]
                         jni[dex_strings[string_index]] = '(' + ''.join(args) + ')' + types[return_type]
-    forbidden = ('setDeviceOwner', 'isDeviceOwnerApp', 'isProfileOwnerApp', 'sendMultipartTextMessage', 'sendTextMessage',
+    forbidden = ('Landroid/telephony/SmsManager;', 'setDeviceOwner', 'isDeviceOwnerApp', 'isProfileOwnerApp', 'sendMultipartTextMessage', 'sendTextMessage',
         'setUninstallBlocked', 'isUninstallBlocked', 'setAlwaysOnVpnPackage', 'clearDeviceOwnerApp',
         'setUserControlDisabledPackages', 'setGlobalPrivateDnsModeOpportunistic', 'Codice custode', 'Protezioni Strong')
     hits = sorted(s for s in strings if any(x in s for x in forbidden))

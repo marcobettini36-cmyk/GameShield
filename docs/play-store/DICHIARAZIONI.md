@@ -28,6 +28,7 @@ INTERNET: traffico consentito, DNS/probe, feed GitHub. ACCESS_NETWORK_STATE: ret
 
 - [VpnService](https://support.google.com/googleplay/android-developer/answer/12564964?hl=en)
 - [Accessibility e API sensibili](https://support.google.com/googleplay/android-developer/answer/16558241?hl=en)
+- [Accessibility: automazioni deterministiche e disclosure](https://support.google.com/googleplay/android-developer/answer/10964491?hl=en)
 - [Disclosure e dati](https://support.google.com/googleplay/android-developer/answer/10144311?hl=en)
 - [Foreground services](https://support.google.com/googleplay/android-developer/answer/13392821?hl=en)
 - [Target API 36](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en)
