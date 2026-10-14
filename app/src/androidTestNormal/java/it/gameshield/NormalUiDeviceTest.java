@@ -17,7 +17,9 @@ public class NormalUiDeviceTest {
     private final Context c=i.getTargetContext();private Activity screen;
     @Before public void before(){NormalSafety.prefs(c).edit().clear().putBoolean("setupSeen060",true).commit();}
     @After public void after(){if(screen!=null)i.runOnMainSync(()->screen.finish());}
-    private Activity open(Class<? extends Activity> type){screen=i.startActivitySync(new Intent(c,type).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));i.waitForIdleSync();return screen;}
+    // Start a fresh task so startActivitySync observes onCreate rather than task reuse.
+    // This removes Activities only; saved preferences must survive and are asserted below.
+    private Activity open(Class<? extends Activity> type){screen=i.startActivitySync(new Intent(c,type).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK));i.waitForIdleSync();return screen;}
     private Button find(View v,String text){if(v instanceof Button&&((Button)v).getText().toString().equals(text))return (Button)v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int n=0;n<g.getChildCount();n++){Button b=find(g.getChildAt(n),text);if(b!=null)return b;}}return null;}
     private void click(String text){i.runOnMainSync(()->{Button b=find(screen.getWindow().getDecorView(),text);assertNotNull(text,b);b.performClick();});i.waitForIdleSync();}
     private String text(View v){StringBuilder s=new StringBuilder();if(v instanceof TextView)s.append(((TextView)v).getText());if(v instanceof ViewGroup)for(int n=0;n<((ViewGroup)v).getChildCount();n++)s.append('\n').append(text(((ViewGroup)v).getChildAt(n)));return s.toString();}
