@@ -69,7 +69,7 @@ public final class NormalDnsActivity extends NormalScreen {
         TextView result=label("Da verificare. Premi il pulsante per una prova reale; completare la guida non equivale a un test.",16);
         EditText sample=new EditText(this);sample.setSingleLine(true);sample.setHint("Dominio campione nella blacklist");sample.setText("bet365.com");root.addView(sample);
         button("Verifica DNS e navigazione",()->{if(busy)return;String domain=DomainRules.normalize(sample.getText().toString());if(domain==null){message("Inserisci un dominio valido senza percorso.");return;}
-            busy=true;NormalSafety.prefs(this).edit().remove("dnsVerifiedHost").apply();result.setText("Verifica in corso. La VPN resta invariata.");
+            busy=true;NormalSafety.prefs(this).edit().remove("dnsVerifiedHost").apply();refresh();result.setText("Verifica in corso. La VPN resta invariata.");
             worker.execute(()->{String report;try{if(!new RuleStore(this).rules().blocks(domain))report="Scegli un dominio nella blacklist o nelle tue regole. Nessuna query inviata.";else {
                 String testedHost=NormalProtectionState.actualDns(this);android.net.Network testedNetwork=NormalProtectionState.dnsNetwork(this);
                 report=NormalDnsProbe.run(this,domain);
