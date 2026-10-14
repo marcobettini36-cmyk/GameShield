@@ -7,12 +7,12 @@ Normal's manifest removes the shared Device Admin receiver. JNI entry points
 remain protected from renaming. The VPN implementation is unchanged.
 
 ```powershell
-./gradlew.bat -PnormalPlayRelease=true -PnormalVersionCode=7 clean testNormalReleaseUnitTest lintNormalRelease bundleNormalRelease
+./gradlew.bat -PnormalPlayRelease=true -PnormalVersionCode=11 clean testNormalReleaseUnitTest lintNormalRelease bundleNormalRelease
 ```
 
 The output is `app/build/outputs/bundle/normalRelease/app-normal-release.aab`.
-Normal uses versionName `0.4.0`. Its new default versionCode is `7`, above the
-previous repository code `6`. The Play profile excludes automatic SMS/SEND_SMS;
+Normal uses versionName `0.6.1`. Its new default versionCode is `11`, above the
+previous generated bundle code `10`. The Play profile excludes automatic SMS/SEND_SMS;
 the debug APK offers that feature for direct distribution. Normal's voluntary
 administrator is separate from Strong's Device Owner policies. Before upload, check Play Console's highest code
 and override `normalVersionCode` with a larger number when required.
@@ -27,7 +27,9 @@ existing GameShield upload identity using either environment variables:
 - `GAMESHIELD_UPLOAD_STORE_PASSWORD`
 - `GAMESHIELD_UPLOAD_KEY_PASSWORD`
 
-or a private `.local-signing/release.properties` file with the corresponding
+or preferably a credentials file outside the checkout selected with
+`GAMESHIELD_UPLOAD_PROPERTIES` or `-PuploadPropertiesFile=C:/private/release.properties`,
+with the corresponding properties below. A private `.local-signing/release.properties` remains compatible, with
 `storeFile`, `keyAlias`, `storePassword`, and `keyPassword` properties. This folder
 is excluded from Git. Use forward slashes in a Windows properties path. Never
 commit or log credentials. Without this configuration, Gradle produces an

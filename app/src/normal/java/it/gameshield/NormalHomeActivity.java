@@ -39,7 +39,7 @@ public final class NormalHomeActivity extends NormalScreen {
             +"\nATTIVA indica i livelli operativi e un campione DNS verificato, non una protezione totale. Amministratore, periodo e persona fidata sono facoltativi.");
     }
     private void activate(){new AlertDialog.Builder(this).setTitle("Attiva il filtro Internet")
-        .setMessage("GameShield filtra i siti nel telefono senza intercettare HTTPS. Android chiederà il consenso alla VPN locale; sostituirà eventuali altre VPN. La scelta resta revocabile.")
+        .setMessage(NormalVpnDisclosure.TEXT)
         .setNegativeButton("Annulla",null).setPositiveButton("Continua",(d,w)->{Intent i=VpnService.prepare(this);if(i==null)launch();else startActivityForResult(i,41);}).show();}
     private void launch(){try{startForegroundService(new Intent(this,ShieldVpnService.class));}catch(RuntimeException e){message("Android non ha avviato il filtro. Riapri l'app e controlla le impostazioni VPN.");}}
     @Override protected void onActivityResult(int r,int result,Intent data){super.onActivityResult(r,result,data);if(r==41&&result==RESULT_OK)launch();}

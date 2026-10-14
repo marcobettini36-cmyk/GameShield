@@ -37,7 +37,7 @@ public final class NormalSetupActivity extends NormalScreen {
         return "Nessun permesso viene concesso automaticamente. Puoi tornare indietro in qualsiasi momento.";
     }
     private void configure(){try{switch(step){
-        case 0:new AlertDialog.Builder(this).setTitle("Consenso al filtro Internet").setMessage(TEXT[0]).setNegativeButton("Annulla",null).setPositiveButton("Continua",(d,w)->{Intent i=VpnService.prepare(this);if(i==null)startForegroundService(new Intent(this,ShieldVpnService.class));else startActivityForResult(i,42);}).show();break;
+        case 0:new AlertDialog.Builder(this).setTitle("Consenso al filtro Internet").setMessage(NormalVpnDisclosure.TEXT).setNegativeButton("Annulla",null).setPositiveButton("Continua",(d,w)->{Intent i=VpnService.prepare(this);if(i==null)startForegroundService(new Intent(this,ShieldVpnService.class));else startActivityForResult(i,42);}).show();break;
         case 1:case 2:startActivity(new Intent(Settings.ACTION_VPN_SETTINGS));break;
         case 3:case 6:startActivity(new Intent(this,NormalLayersActivity.class));break;
         case 4:startActivity(new Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN,new ComponentName(this,NormalAdminReceiver.class)).putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,"Scelta volontaria e revocabile. Nessun blocco delle impostazioni Android."));break;

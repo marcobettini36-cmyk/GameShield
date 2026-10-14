@@ -16,7 +16,7 @@ public final class NormalEmergencyActivity extends NormalScreen {
         button("Apri amministratori del dispositivo",()->open(new Intent(Settings.ACTION_SECURITY_SETTINGS)));
         button("Apri informazioni app / disinstallazione",()->open(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName()))));
         button("Autorizza rilascio d'emergenza dall'app",()->new AlertDialog.Builder(this).setTitle("Conferma emergenza")
-            .setMessage("Il rilascio anticipato sospende il ripristino automatico dopo la conferma finale. Gli avvisi SMS già consentiti restano attivi. Verifica l'identità con il blocco schermo, quando configurato; poi completa la breve conferma anti-impulso.")
+            .setMessage("Il rilascio anticipato sospende il ripristino automatico dopo la conferma finale. " + (BuildConfig.AUTOMATIC_SMS_ENABLED ? "Gli avvisi SMS già consentiti restano attivi. " : "") + "Verifica l'identità con il blocco schermo, quando configurato; poi completa la breve conferma anti-impulso.")
             .setNegativeButton("Mantieni protezione",null).setPositiveButton("Procedi",(d,w)->credential()).show());
         button("Torna indietro",this::finish);
     }

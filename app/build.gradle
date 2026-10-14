@@ -65,10 +65,13 @@ def normalPlayRelease = project.findProperty('normalPlayRelease') == 'true'
 if (normalPlayRelease && gradle.startParameter.taskNames.any { it.toLowerCase().contains('strong') })
     throw new GradleException('Normal Play packaging must not build Strong')
 def normalAutomaticSms = !normalPlayRelease && project.findProperty('normalAutomaticSms') != 'false'
-def normalCode = (project.findProperty('normalVersionCode') ?: '10').toInteger()
-if (normalCode <= 9) throw new GradleException('Normal versionCode must exceed previous code 9')
+def normalCode = (project.findProperty('normalVersionCode') ?: '11').toInteger()
+if (normalCode <= 10) throw new GradleException('Normal versionCode must exceed previous generated code 10')
 def uploadProperties = new Properties()
-def uploadFile = rootProject.file('.local-signing/release.properties')
+// Prefer a private credentials file outside the checkout, or existing environment variables.
+def uploadFile = rootProject.file(project.findProperty('uploadPropertiesFile') ?: System.getenv('GAMESHIELD_UPLOAD_PROPERTIES') ?: '.local-signing/release.properties')
+if ((project.hasProperty('uploadPropertiesFile') || System.getenv('GAMESHIELD_UPLOAD_PROPERTIES')) && !uploadFile.isFile())
+    throw new GradleException('The requested external upload credentials file is unavailable')
 if (uploadFile.isFile()) uploadFile.withInputStream { uploadProperties.load(it) }
 def uploadValue = { name, environment -> uploadProperties.getProperty(name) ?: System.getenv(environment) }
 def uploadStore = uploadValue('storeFile', 'GAMESHIELD_UPLOAD_KEYSTORE')
