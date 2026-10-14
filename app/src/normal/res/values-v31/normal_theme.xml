@@ -1,0 +1,7 @@
+<resources>
+    <style name="NormalTheme" parent="NormalThemeBase">
+        <item name="android:windowSplashScreenBackground">#101816</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/normal_launcher_foreground</item>
+        <item name="android:windowSplashScreenAnimationDuration">0</item>
+    </style>
+</resources>

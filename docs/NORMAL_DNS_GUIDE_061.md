@@ -18,9 +18,16 @@ traduzioni possono variare. Non pretendiamo di aver ispezionato un account priva
 Il piano gratuito permette 300.000 query al mese, poi risponde senza filtrare:
 https://nextdns.io/pricing. Portale: https://my.nextdns.io/.
 
-Il nuovo logo non è incluso: l'allegato contiene solo testo e nel repository
-non è presente il file originale dello scudo descritto. Nessuna immagine generica
-è stata creata. Le icone attuali restano finché viene fornito il riferimento.
+Il logo originale è stato fornito in seguito come `icone_approvate_6_app(1).png`.
+Il PNG 391×382 viene copiato byte per byte in drawable-nodpi, senza rigenerazione,
+ritaglio o modifica del contenuto. XML con inset frazionari adatta il rapporto
+d'aspetto alla safe zone: artwork 60×58.62 in canvas logico 108, inferiore a 66.
+Mipmap adaptive anydpi per API26+, monochrome separato per API33+, splash API31+
+e ImageView iniziale. AnyDpi/dp supporta mdpi–xxxhdpi senza duplicare o ingrandire
+il raster originale. Il simbolo notifiche è un overlay vettoriale bianco Normal
+della risorsa shield: cambia solo l'aspetto, non il codice dei servizi.
+Strong continua a usare le risorse main originarie. Fonte specifiche:
+https://developer.android.com/develop/ui/compose/system/icon_design_adaptive.
 
 Release Play senza SEND_SMS. APK debug conserva SMS opzionali. AAB unsigned,
 in attesa della chiave upload originale e della review Play; nessuna nuova chiave

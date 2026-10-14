@@ -10,6 +10,8 @@ public final class NormalHomeActivity extends NormalScreen {
     private TextView state,details;
     private final Runnable refresh=new Runnable(){public void run(){render();handler.postDelayed(this,2000);}};
     @Override public void onCreate(Bundle b){super.onCreate(b);layout("Più spazio alla tua vita.");
+        ImageView logo=new ImageView(this);logo.setImageResource(R.drawable.normal_logo_original);logo.setContentDescription("Logo GameShield: scudo e divieto di gioco");logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(dp(72),dp(70));logoSize.gravity=android.view.Gravity.CENTER_HORIZONTAL;logoSize.setMargins(0,0,0,dp(8));root.addView(logo,0,logoSize);
         label("Protezione dal gioco d'azzardo, sotto il tuo controllo.",17);
         state=panel("",28);
         android.graphics.drawable.Drawable shield=getDrawable(it.gameshield.R.drawable.shield);if(shield!=null&&getResources().getConfiguration().fontScale<=1.3f){shield.setTint(0xff58e5aa);shield.setBounds(0,0,dp(32),dp(32));state.setCompoundDrawables(shield,null,null,null);state.setCompoundDrawablePadding(dp(12));}

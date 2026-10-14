@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.SEND_SMS" tools:node="${normalSmsNode}" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
-    <application android:theme="@style/NormalTheme" tools:replace="android:theme">
+    <application android:theme="@style/NormalTheme" android:icon="@mipmap/normal_launcher" android:roundIcon="@mipmap/normal_launcher" tools:replace="android:theme,android:icon">
         <activity android:name="it.gameshield.MainActivity" android:exported="false" tools:node="replace" />
         <activity android:name="it.gameshield.NormalHomeActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>

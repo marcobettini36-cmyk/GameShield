@@ -1,0 +1,6 @@
+<!-- On a 108 dp adaptive layer: approved artwork 60 x 58.62 dp, inside 66 dp safe zone. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="22.2222%" android:insetRight="22.2222%"
+    android:insetTop="22.8616%" android:insetBottom="22.8616%">
+    <bitmap android:src="@drawable/normal_logo_original" android:gravity="fill" android:filter="true" />
+</inset>
