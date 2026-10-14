@@ -65,8 +65,8 @@ def normalPlayRelease = project.findProperty('normalPlayRelease') == 'true'
 if (normalPlayRelease && gradle.startParameter.taskNames.any { it.toLowerCase().contains('strong') })
     throw new GradleException('Normal Play packaging must not build Strong')
 def normalAutomaticSms = !normalPlayRelease && project.findProperty('normalAutomaticSms') != 'false'
-def normalCode = (project.findProperty('normalVersionCode') ?: '9').toInteger()
-if (normalCode <= 8) throw new GradleException('Normal versionCode must exceed previous code 8')
+def normalCode = (project.findProperty('normalVersionCode') ?: '10').toInteger()
+if (normalCode <= 9) throw new GradleException('Normal versionCode must exceed previous code 9')
 def uploadProperties = new Properties()
 def uploadFile = rootProject.file('.local-signing/release.properties')
 if (uploadFile.isFile()) uploadFile.withInputStream { uploadProperties.load(it) }
@@ -88,7 +88,7 @@ android {
     }
     flavorDimensions += 'protection'
     productFlavors {
-        normal { dimension 'protection'; versionCode normalCode; versionName '0.6.0'; targetSdk (normalPlayRelease ? 36 : 35); buildConfigField 'boolean', 'STRONG', 'false'; buildConfigField 'boolean', 'AUTOMATIC_SMS_ENABLED', normalAutomaticSms.toString(); manifestPlaceholders = [normalSmsNode: normalAutomaticSms ? 'merge' : 'remove']; resValue 'string', 'app_name', 'GameShield' }
+        normal { dimension 'protection'; versionCode normalCode; versionName '0.6.1'; targetSdk (normalPlayRelease ? 36 : 35); buildConfigField 'boolean', 'STRONG', 'false'; buildConfigField 'boolean', 'AUTOMATIC_SMS_ENABLED', normalAutomaticSms.toString(); manifestPlaceholders = [normalSmsNode: normalAutomaticSms ? 'merge' : 'remove']; resValue 'string', 'app_name', 'GameShield' }
         strong { dimension 'protection'; minSdk 30; applicationIdSuffix '.strong'; buildConfigField 'boolean', 'STRONG', 'true'; resValue 'string', 'app_name', 'GameShield Strong' }
     }
     buildFeatures { buildConfig true }
