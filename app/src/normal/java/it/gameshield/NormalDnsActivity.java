@@ -21,7 +21,11 @@ public final class NormalDnsActivity extends NormalScreen {
     private void declared(String text){CheckBox check=new CheckBox(this);check.setText(text+" (dichiarato da te)");check.setTextColor(0xffc9ded3);check.setTextSize(16);check.setMinHeight(dp(48));check.setChecked((prefs().getInt("dnsGuideDeclared",0)&(1<<step))!=0);root.addView(check);final int s=step;check.setOnCheckedChangeListener((v,on)->{int bits=prefs().getInt("dnsGuideDeclared",0);prefs().edit().putInt("dnsGuideDeclared",on?bits|(1<<s):bits&~(1<<s)).apply();refresh();});}
     private void render(){
         String[] titles={"Crea il tuo account","Scegli solo gioco d'azzardo","Trova il tuo indirizzo","Salva in GameShield","Configura il telefono","Verifica il risultato"};
-        layout("Guida DNS personale");label("Passaggio "+(step+1)+" di 6 · "+titles[step],22);progress=label("",14);status=panel("",16);
+        layout("Guida DNS personale");
+        // Insets belong to the scroll viewport, so scrolled text cannot cover system bars.
+        ScrollView scroll=(ScrollView)root.getParent();scroll.setClipToPadding(true);
+        scroll.setOnApplyWindowInsetsListener((v,insets)->{scroll.setPadding(0,insets.getSystemWindowInsetTop(),0,insets.getSystemWindowInsetBottom());root.setPadding(dp(22),dp(28),dp(22),dp(32));return insets;});scroll.requestApplyInsets();
+        label("Passaggio "+(step+1)+" di 6 · "+titles[step],22);progress=label("",14);status=panel("",16);
         switch(step){
         case 0:
             label("Il DNS è la rubrica di Internet: un servizio esterno può rifiutare gli indirizzi dei siti di gioco anche senza VPN. È un livello facoltativo, con liste diverse da GameShield.",16);
